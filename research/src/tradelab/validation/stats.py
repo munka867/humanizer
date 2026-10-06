@@ -293,6 +293,8 @@ def metrics(trades: pd.DataFrame, equity_start: float, n_variants_tried: int = 1
     tt = mean_tstat(pnl)
     td = mean_tstat(daily)
     ci = bootstrap_mean_ci_by_day(t, n_boot=n_boot, seed=seed)
+    ci_r = (bootstrap_mean_ci_by_day(t.assign(r_multiple=r), n_boot=n_boot, seed=seed, col="r_multiple")
+            if np.isfinite(r).all() else None)  # STRATEGY_SPEC s2 criterion 1 is stated in R
     out.update(
         ev_usd=float(pnl.mean()), ev_r=float(np.nanmean(r)) if np.isfinite(r).any() else float("nan"),
         std_usd=float(pnl.std(ddof=1)) if n > 1 else float("nan"),
@@ -302,7 +304,7 @@ def metrics(trades: pd.DataFrame, equity_start: float, n_variants_tried: int = 1
         exposure=exposure_fraction(t, n_session_days, session_hours_per_day),
         n_days=len(daily), t_trade=tt["t"], p_trade_two_sided=tt["p_two_sided"],
         t_day=td["t"], p_day_two_sided=td["p_two_sided"], p_day_one_sided=td["p_one_sided"],
-        boot_ci_ev_usd=(ci["lo"], ci["hi"]), boot_alpha=ci["alpha"], boot_p_ev_le_0=ci.get("p_mean_le_0"),
+        boot_ci_ev_usd=(ci["lo"], ci["hi"]), boot_ci_ev_r=(ci_r["lo"], ci_r["hi"]) if ci_r else None, boot_alpha=ci["alpha"], boot_p_ev_le_0=ci.get("p_mean_le_0"),
         sharpe_per_day=sharpe_per_day(daily),
         p_bonferroni_day=bonferroni(td["p_two_sided"], n_variants_tried),
         deflated_sharpe=deflated_sharpe(daily, n_variants_tried),

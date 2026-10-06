@@ -84,6 +84,12 @@ forward paper test") requires ALL of:
 **INCONCLUSIVE**: everything else (including too few trades). Given section 6, this is the most likely
 outcome for any realistic edge; it is a legitimate result, not a failure to be fixed by loosening thresholds.
 
+### 5a. Relation to STRATEGY_SPEC section 2 (added in review)
+STRATEGY_SPEC s2 criteria 1-5 (CI lower bound of mean net R > 0 at x1, beats B0 95th pct and B1, EV > 0 at x1.5,
+n >= 200, Bonferroni) ALSO apply; where a threshold differs, the stricter one governs. The spec states the CI in R
+(`metrics()['boot_ci_ev_r']`), this plan in USD (`boot_ci_ev_usd`): require both. B0 percentiles must come from
+replications matched to H1's days/trade count (see REVIEW R-07).
+
 ## 6. Data needed (assumption-driven power; NOT a forecast of the real edge or variance)
 One-sample test of mean net EV > 0 with independent trades, normal approximation:
 `n = ((z_{1-a} + z_{power}) * sd / edge)^2`, one-sided a = 0.05, power = 0.80 (z = 1.645 + 0.842).

@@ -92,8 +92,13 @@ class FinalTestResult:
 
 
 def evaluate_final_test(strategy_id: str, cfg_hash: str, evaluator: Callable[[], Any],
-                        log_path=DEFAULT_LOG, git: dict | None = None, purpose: str = "") -> FinalTestResult:
+                        log_path=DEFAULT_LOG, git: dict | None = None, purpose: str = "",
+                        data_is_synthetic: bool = False) -> FinalTestResult:
     git = git if git is not None else git_state()
+    if data_is_synthetic:   # contracts.py: real final-test runs must refuse SYNTHETIC data (and must not burn the single look)
+        _append(log_path, {"event": "final_test_access", "granted": False, "ts": _now(), "strategy_id": strategy_id,
+                           "config_hash": cfg_hash, "reason": "synthetic data", "purpose": purpose, **git})
+        raise FinalTestRefused("Refused: data is SYNTHETIC; the final test is for real data only.")
     if not is_frozen(strategy_id, cfg_hash, log_path):
         _append(log_path, {"event": "final_test_access", "granted": False, "ts": _now(), "strategy_id": strategy_id,
                            "config_hash": cfg_hash, "reason": "config not frozen", "purpose": purpose, **git})

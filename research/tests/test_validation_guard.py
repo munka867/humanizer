@@ -57,3 +57,12 @@ def test_config_hash_stable_and_sensitive():
     assert config_hash({"a": 1, "b": 2}) == config_hash({"b": 2, "a": 1})
     assert config_hash({"a": 1}) != config_hash({"a": 2})
     assert is_frozen("x", "y", "/nonexistent/none.jsonl") is False
+
+
+def test_refuses_synthetic_data_without_consuming_access(tmp_path):
+    log = tmp_path / "log.jsonl"
+    freeze_config("s", "h", log, git=GIT)
+    with pytest.raises(FinalTestRefused):
+        evaluate_final_test("s", "h", lambda: 1, log, git=GIT, data_is_synthetic=True)
+    r = evaluate_final_test("s", "h", lambda: 1, log, git=GIT)
+    assert r.untouched and r.access_number == 1

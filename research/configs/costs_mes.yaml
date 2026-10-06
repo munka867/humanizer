@@ -1,0 +1,14 @@
+# Cost ASSUMPTIONS for MES via IBKR Canada. NONE of these numbers has been verified.
+# TODO(verify): check the CURRENT Interactive Brokers (Canada) futures commission schedule, the CME
+# micro E-mini exchange/clearing fees, and regulatory (NFA) fees before relying on any result. Fees may be
+# quoted in CAD or tiered by volume. Do not treat these as facts.
+base:
+  commission_per_side_usd: 0.85      # ASSUMPTION: broker commission per contract per side (conservative placeholder)
+  exchange_fee_per_side_usd: 0.35    # ASSUMPTION: exchange + clearing + regulatory per contract per side
+  spread_ticks: 1.0                  # ASSUMPTION: quoted spread of 1 tick in RTH (half paid on each market fill)
+  slippage_ticks_per_side: 0.25      # ASSUMPTION: extra adverse ticks per market/stop fill
+  stop_extra_slippage_ticks: 1.0     # ASSUMPTION: extra adverse ticks on stop fills (stop runs add slippage)
+scenarios:                           # multiplier applied to ALL components above
+  x1: 1.0
+  x1_5: 1.5
+  x2: 2.0

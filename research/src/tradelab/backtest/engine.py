@@ -149,7 +149,7 @@ def run_backtest(bars: pd.DataFrame, strategy: StreamingStrategy, cfg: EngineCon
                     qty = int(min(max(math.floor(cfg.risk_budget_usd / (D * pv)), 1), cfg.max_qty))
                 else:
                     raise ValueError(f"sizing_mode {cfg.sizing_mode!r}")
-                tgt_raw = o - sig.side * sig.target_r * D
+                tgt_raw = o + sig.side * sig.target_r * D
                 target = _round_tick(tgt_raw, tick, "down" if sig.side == -1 else "up")
                 pos = _Pos(sig, sig.side, qty, i, ts, o, sig.stop_px, target, D, date, ctr,
                            min(sig.time_exit_min, eod_min), sig.time_exit_min <= eod_min)
@@ -196,7 +196,6 @@ def run_backtest(bars: pd.DataFrame, strategy: StreamingStrategy, cfg: EngineCon
                 diag["signal_dropped_in_position_or_end"] += 1
 
     trades = pd.DataFrame(rows, columns=TRADE_COLUMNS)
-    if len(trades):
-        trades = trades.astype({"trade_id": "int64", "side": "int64", "qty": "int64", "bars_held": "int64"})
+    trades = trades.astype({"trade_id": "int64", "side": "int64", "qty": "int64", "bars_held": "int64"})
     return BacktestResult(trades=trades, signals=signals, diagnostics=diag + Counter(
         {("strategy_" + k): v for k, v in getattr(strategy, "diagnostics", Counter()).items()}))

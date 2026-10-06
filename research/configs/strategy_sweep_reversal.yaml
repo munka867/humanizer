@@ -1,0 +1,25 @@
+# H1 prior-extreme liquidity sweep reversal. Rules: docs/STRATEGY_SPEC.md (pre-registered).
+id: H1_sweep_reversal_v1
+strategy: sweep_reversal
+instrument: MES
+seed: 20261006                 # no randomness in H1; stored per project convention
+params:                        # baseline cell = target_r 2.0, levels both
+  target_r: 2.0
+  levels: both
+  min_sweep_ticks: 1
+  stop_buffer_ticks: 1
+  first_signal_bar: "09:35"
+  last_signal_bar: "10:55"
+  time_exit: "11:30"
+  min_risk_pts: 2.0
+  max_risk_pts: 12.0
+grid:                          # LATER optimisation only; 9 variants. Do not run before logging.
+  target_r: [1.5, 2.0, 3.0]
+  levels: [prev_rth, overnight, both]
+engine:
+  eod_flat: "15:55"
+  limit_through_ticks: 1.0
+  sizing_mode: fixed
+  fixed_qty: 1
+  max_qty: 1
+  max_trades_per_day: 1

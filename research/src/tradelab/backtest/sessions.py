@@ -172,7 +172,7 @@ class SessionTracker:
         if rth:
             contracts_today |= rth.contracts
         if prev is None:
-            roll = True
+            roll = len(contracts_today) > 1   # first day in data: skipped anyway via no_prev_session
         else:
             roll = len(contracts_today) != 1 or (len(contracts_today) == 1 and frozenset(contracts_today) != prev.contracts)
         if rth is not None:

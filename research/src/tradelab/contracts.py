@@ -6,7 +6,9 @@ Data formats
 Bars (pandas.DataFrame), one row per bar, sorted ascending, unique index:
   index   : tz-aware UTC DatetimeIndex named "ts_open" (bar OPEN time).
   columns : open, high, low, close (float64), volume (float64), plus
-            "contract" (str, e.g. "MESZ4") for futures where known.
+            "contract" (str, e.g. "MESZ4"): REQUIRED for futures backtests, because roll-day
+            skipping depends on it. Extra CSV columns are ignored by loaders.
+  df.attrs["SYNTHETIC"] marks test-only data; real validation/final-test runs must refuse it.
   A bar labelled ts_open=T covers [T, T + bar_seconds). It is only knowable at
   T + bar_seconds. Strategies may use bar i's values only when deciding at or
   after ts_open[i] + bar_seconds.
@@ -15,6 +17,10 @@ Bars (pandas.DataFrame), one row per bar, sorted ascending, unique index:
 Trades (pandas.DataFrame) -- the interface between backtester and validation:
   TRADE_COLUMNS below. All timestamps tz-aware UTC. Money in account currency
   USD for the instrument (futures settle in USD). 'pnl_gross' excludes costs;
+  exit_ts for an intrabar stop/target exit is the CLOSE time of the bar in which it
+  occurred (latest possible; conservative for overlap/purging). Exits at a bar open
+  use that open time. 'strategy' holds the variant id "<config id>@k=v,..." that must
+  match docs/EXPERIMENT_LOG.md. Random-baseline runs may add a 'rep' column.
   'costs' is a positive number (commission+fees+spread+slippage in USD);
   'pnl_net' = pnl_gross - costs.
 """
@@ -68,9 +74,11 @@ class Split:
     purge: pd.Timedelta   # gap removed before each later segment so trade outcomes cannot straddle a boundary
 
 class Strategy(Protocol):
+    """Streaming interface: look-ahead is impossible by construction because the
+    strategy only ever sees one completed bar at a time."""
     name: str
-    def generate_orders(self, bars: pd.DataFrame, params: dict) -> pd.DataFrame:
-        """Return order intents using only information knowable at each decision time.
-        Must not read bars after the decision time. Engine enforces by feeding data
-        incrementally in the leakage test (see tests/test_no_lookahead.py)."""
+    def reset(self) -> None: ...
+    def on_bar(self, bar: pd.Series):
+        """Receive one COMPLETED bar (knowable at ts_open + bar_seconds). Return a Signal
+        (engine fills it at the NEXT bar's open) or None."""
         ...

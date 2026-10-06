@@ -1,0 +1,18 @@
+# B0 random-entry baseline. Rules: docs/STRATEGY_SPEC.md section 6. Replications are NOT variants.
+id: B0_random_entry_v1
+strategy: random_entry
+instrument: MES
+seed: 20261006
+reps: 200
+params:
+  target_r: 2.0
+  seed: 20261006
+  rep: 0
+  first_signal_bar: "09:35"
+  last_signal_bar: "10:55"
+  time_exit: "11:30"
+  min_risk_pts: 2.0
+  max_risk_pts: 12.0
+  stop_distances_pts: null     # null -> uniform ticks in [min,max]; run_backtest --match-trades supplies H1's empirical distances
+grid: {}
+engine: {eod_flat: "15:55", limit_through_ticks: 1.0, sizing_mode: fixed, fixed_qty: 1, max_qty: 1, max_trades_per_day: 1}

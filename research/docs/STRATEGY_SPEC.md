@@ -153,7 +153,7 @@ ticks, stop exits additionally `stop_extra_slippage_ticks`; limit exits pay no s
 - B1 opening-range breakout: OR = high/low of bars 09:30..09:55 (6 bars, all present). From 10:00 to
   10:55 (signal bar open), the first bar CLOSING beyond OR high (long) / OR low (short) is the signal.
   Stop = opposite OR extreme -/+ 1 tick, target = target_r*D, same risk filter 2-12 points, time exit
-  11:30, same costs, max 1 trade/day, same day-skip rules (but needs no prior-session levels).
+  11:30, same costs, max 1 trade/day, same day-skip rules (it needs no prior-session LEVELS, but a previous session must still exist for the roll check).
   Note B1's eligible day set differs slightly from H1's; comparisons restrict to common dates.
 - Both baselines are benchmarks, not tuned: only target_r varies for B1.
 

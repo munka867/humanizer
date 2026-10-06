@@ -1,0 +1,16 @@
+# B1 opening-range breakout baseline (30-minute range). Rules: docs/STRATEGY_SPEC.md section 6.
+id: B1_orb30_v1
+strategy: orb
+instrument: MES
+seed: 20261006
+params:
+  target_r: 2.0
+  or_end: "10:00"
+  last_signal_bar: "10:55"
+  stop_buffer_ticks: 1
+  time_exit: "11:30"
+  min_risk_pts: 2.0
+  max_risk_pts: 12.0
+grid:
+  target_r: [1.5, 2.0, 3.0]
+engine: {eod_flat: "15:55", limit_through_ticks: 1.0, sizing_mode: fixed, fixed_qty: 1, max_qty: 1, max_trades_per_day: 1}

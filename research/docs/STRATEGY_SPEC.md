@@ -1,6 +1,6 @@
 # STRATEGY_SPEC — Pre-registered strategy and backtest specification
 
-Status: PRE-REGISTERED (v1, written before any backtest code was run and before any real data exists).
+Status: PRE-REGISTERED (v1.1 — see change note at the end; v1, written before any backtest code was run and before any real data exists).
 Any change to a rule marked FIXED below creates a new variant and must be logged in
 `docs/EXPERIMENT_LOG.md` BEFORE results are read.
 
@@ -109,8 +109,10 @@ Evaluated bar by bar after entry, the entry bar itself included for stop/target 
 
 ### 3.6 No-trade conditions (all causal: only data up to the decision time)
 Skip the whole day when any holds:
-- US equity half-day (calendar rule: day after US Thanksgiving; Dec 24 on a weekday; Jul 3 on Mon-Thu).
-  No other holiday calendar is used; abnormal holiday sessions are caught by the completeness checks.
+- US equity half-day (day after US Thanksgiving; Dec 24 on a weekday; Jul 3 on Mon-Thu) OR any weekday on
+  the `data/calendar.py` holiday-candidate list (New Year, MLK, Presidents, Good Friday, Memorial, Juneteenth,
+  Jul 4, Labor, Thanksgiving, Dec 25 and observed shifts) (v1.1, R-02). Also, if the previous session is such a
+  date and prior levels are needed, the day is skipped. The list is conservative (may skip normal sessions).
 - Data gap today: any missing 5-min bar between 09:30 and the decision bar (checked incrementally; a gap
   later in the day is unknowable at decision time and is handled by exit rule 5 instead).
 - Contract roll day (the contract seen in today's ON/RTH bars differs from the previous RTH session's, or more
@@ -143,11 +145,13 @@ ticks, stop exits additionally `stop_extra_slippage_ticks`; limit exits pay no s
 `cost_multiplier` scales every component. Stress scenarios: x1, x1.5, x2.
 
 ## 6. Baselines that H1 must beat
-- B0 random entry (null for "any entry in this window with this stop/target geometry"):
-  same eligible days as H1 (`levels=both` eligibility), same window, same target_r, same time exit and
-  costs. Per day: one random signal bar uniform over the 17 eligible bars 09:35..10:55, direction +/-1 with
-  p=0.5, stop distance D_pts drawn from the empirical H1 stop-distance distribution of the same dataset
-  (supplied explicitly; default uniform over ticks in [2,12] points). Stop = signal close -/+ D_pts.
+- B0 random entry (null for "H1's days and timing, but no sweep information") — MATCHED (v1.1, R-07/R-11):
+  trades ONLY on days where H1 (baseline cell, levels=both) emitted a signal in the same segment, same
+  target_r, time exit and costs. Per such day: signal bar open drawn from the empirical set of H1 signal-bar
+  times of day (pooled), direction +/-1 with p=0.5, distance D_pts drawn from the empirical H1 SIGNAL-time
+  |stop - signal close| of the same segment (train/validation only, never test-period geometry). Stop =
+  signal close -/+ D_pts. The runner derives these from H1 signals on the same segment; the null therefore has
+  H1's trade-count scale. (Without matching inputs it falls back to uniform bars on all eligible days.)
   Randomness: `default_rng([seed, rep, date_ordinal])` — depends only on the date, never on future data.
   >= 200 replications; compare H1's mean R to the replication distribution.
 - B1 opening-range breakout: OR = high/low of bars 09:30..09:55 (6 bars, all present). From 10:00 to
@@ -179,3 +183,16 @@ Not in grid, FIXED: `min_sweep_ticks`=1, `stop_buffer_ticks`=1, window, time exi
 Strategies are streaming objects: `on_bar` receives one completed bar at a time and holds only state
 derived from past bars. `tests/test_no_lookahead.py` checks that signals and closed trades up to time t are
 identical when bars after t are truncated or replaced by random garbage.
+
+## 9. Change note v1.1 (response to docs/REVIEW.md; still before any real data)
+- R-02: all holiday-candidate dates skipped (3.6). R-07/R-11: B0 matched to H1 days, time-of-day and signal-time
+  distances (6). R-03/R-04: engine rejects non 5-minute bars and corrupt OHLC. R-10: a position closed because of a
+  missing bar / day or contract change is labelled `gap_exit` (not `eod`) and counted.
+- R-08: variant ids are fully qualified (`<id>@levels=..,target_r=..`) and the runner refuses ids absent from
+  `docs/EXPERIMENT_LOG.md`. R-09: B0 replications carry `rep` and a globally unique `uid` (`trade_id` repeats per rep).
+- R-01/R-05/R-06: the runner reads data only through `data.loader.load_bars` (naive timestamps need `--tz-hint`),
+  requires a clean quality report and a real per-bar contract column (month/year codes; a single label may not span
+  >100 days), runs `--segment train|validation` on bars truncated at the segment end, and routes `test` only through
+  `validation.final_test_guard`. SYNTHETIC (df.attrs) is refused for test, and for validation unless `--software-test`.
+- R-12: `run_meta.json` reports exposure and days-traded fraction for the segment.
+- These are rule changes made after the independent review but before any real data was seen; registered here.

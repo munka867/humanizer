@@ -19,7 +19,8 @@ Trades (pandas.DataFrame) -- the interface between backtester and validation:
   USD for the instrument (futures settle in USD). 'pnl_gross' excludes costs;
   exit_ts for an intrabar stop/target exit is the CLOSE time of the bar in which it
   occurred (latest possible; conservative for overlap/purging). Exits at a bar open
-  use that open time. 'strategy' holds the variant id "<config id>@k=v,..." that must
+  use that open time. exit_reason values: stop, target, time, eod, ambiguous_stop,
+  gap_exit (position closed because of a missing bar / date change / contract change). 'strategy' holds the variant id "<config id>@k=v,..." that must
   match docs/EXPERIMENT_LOG.md. Random-baseline runs may add a 'rep' column.
   'costs' is a positive number (commission+fees+spread+slippage in USD);
   'pnl_net' = pnl_gross - costs.

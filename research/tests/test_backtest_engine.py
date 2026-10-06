@@ -127,13 +127,13 @@ def test_cancel_when_risk_outside_at_fill():
 def test_discontinuity_closes_at_previous_close_never_held():
     over = {"10:10": (5001, 5002, 5000, 5001.5)}
     t = one(run(one_day(D, over, skip=("10:15",)), sig_at("10:00", side=1, stop_px=4995.0)))
-    assert t.exit_reason == "eod" and t.exit_px == 5001.5 and t.exit_ts == to_utc(D, "10:15")  # 10:10 bar close
+    assert t.exit_reason == "gap_exit" and t.exit_px == 5001.5 and t.exit_ts == to_utc(D, "10:15")  # 10:10 bar close
 
 
 def test_contract_change_while_in_position_closes():
     rows = rth_bars(D, contract="MESM6", end="10:10") + rth_bars(D, contract="MESU6", start="10:15")
     t = one(run(to_df(rows), sig_at("10:00", side=1, stop_px=4995.0)))
-    assert t.exit_reason == "eod" and t.exit_ts == to_utc(D, "10:15")
+    assert t.exit_reason == "gap_exit" and t.exit_ts == to_utc(D, "10:15")
 
 
 def test_cancel_on_contract_change_at_fill():
@@ -183,3 +183,18 @@ def test_bad_index_rejected():
     df = one_day(D).tz_convert("America/New_York")
     with pytest.raises(ValueError):
         run(df, {})
+
+
+def test_corrupt_bars_and_wrong_bar_size_rejected():
+    df = one_day(D).copy()
+    df.iloc[10, df.columns.get_loc("high")] = df.iloc[10]["low"] - 1
+    with pytest.raises(ValueError, match="corrupt"):
+        run(df, {})
+    df = one_day(D).copy()
+    df.iloc[10, df.columns.get_loc("low")] = df.iloc[10]["high"] + 1
+    with pytest.raises(ValueError):
+        run(df, {})
+    one_min = one_day(D).iloc[::1].copy()
+    one_min.index = one_min.index[0] + pd.to_timedelta(range(len(one_min)), unit="min")
+    with pytest.raises(ValueError, match="5-minute"):
+        run(one_min, {})

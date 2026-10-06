@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime as dt
 from dataclasses import dataclass, field
 import pandas as pd
+from tradelab.data.calendar import is_holiday_candidate
 
 NY = "America/New_York"
 RTH_START = 9 * 60 + 30
@@ -31,6 +32,13 @@ def is_half_day(d: dt.date) -> bool:
         thursday = d - dt.timedelta(days=1)
         return thursday.weekday() == 3 and 22 <= thursday.day <= 28
     return False
+
+
+def is_skip_day(d: dt.date) -> bool:
+    """R-02 (spec v1.1): any half-day OR any date on the calendar.py holiday-candidate list
+    (MLK, Presidents, Good Friday, Memorial, Juneteenth, Jul 4, Labor, Thanksgiving(+Fri), Dec 24/25, Jan 1,
+    plus observed shifts). Conservative: weekdays only; CME may trade abbreviated hours on these dates."""
+    return d.weekday() < 5 and (is_half_day(d) or is_holiday_candidate(d))
 
 
 @dataclass
@@ -86,7 +94,7 @@ class BarCtx:
 
     def skip_reason(self, need_prev: bool, need_on: bool) -> str | None:
         if self.half_day:
-            return "half_day"
+            return "holiday_or_half_day"
         if self.phase == "RTH" and not self.rth_contiguous:
             return "data_gap_today"
         if self.prev is None:
@@ -97,6 +105,8 @@ class BarCtx:
             return "day_after_roll"
         if self.prev_age_days is not None and self.prev_age_days > MAX_PREV_AGE_DAYS:
             return "prev_stale"
+        if need_prev and is_skip_day(self.prev.date):
+            return "prev_holiday_or_half_day"
         if need_prev and not self.prev.complete:
             return "prev_incomplete"
         if need_on and not self.on_valid:
@@ -184,7 +194,7 @@ class SessionTracker:
             rth_contiguous=bool(rth.contiguous) if rth else True,
             roll_flag=roll, prev=prev,
             on_hi=on.hi if on else None, on_lo=on.lo if on else None, on_valid=on_valid,
-            half_day=is_half_day(day),
+            half_day=is_skip_day(day),
             prev_age_days=(day - prev.date).days if prev else None)
 
     def _prev_for_on(self, day: dt.date) -> PrevSession | None:

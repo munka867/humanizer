@@ -78,3 +78,14 @@ def test_b0_same_eligible_days_as_h1():
     # first day has no previous session -> no B0 signal, mirroring H1 eligibility
     rows = on_bars("2026-06-02") + rth_bars("2026-06-02")
     assert run_backtest(to_df(rows), b0(), ECFG).signals == []
+
+
+def test_b0_matched_days_and_tods_and_distances():
+    bars = multi_day_bars()
+    p = dict(match_days=("2026-06-03", "2026-06-05"), match_tods=(10 * 60,), stop_distances_pts=(4.0,))
+    for r in range(5):
+        sigs = run_backtest(bars, b0(rep=r, **p), ECFG).signals
+        assert [s.signal_ts.tz_convert("America/New_York").date().isoformat() for s in sigs] == ["2026-06-03", "2026-06-05"]
+        assert all(s.signal_ts == to_utc(s.signal_ts.tz_convert("America/New_York").date(), "10:05") for s in sigs)
+        assert all(abs(s.stop_px - s.ref_px) == 4.0 for s in sigs)
+    assert run_backtest(bars, b0(match_days=()), ECFG).signals == []

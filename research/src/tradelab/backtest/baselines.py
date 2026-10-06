@@ -20,7 +20,9 @@ class RandomParams:
     time_exit: str = "11:30"
     min_risk_pts: float = 2.0
     max_risk_pts: float = 12.0
-    stop_distances_pts: tuple[float, ...] | None = None  # empirical H1 distances; None -> uniform ticks
+    stop_distances_pts: tuple[float, ...] | None = None  # empirical H1 SIGNAL-time |stop-close|; None -> uniform ticks
+    match_days: tuple[str, ...] | None = None   # ISO dates on which H1 signalled; B0 trades only these (R-07)
+    match_tods: tuple[int, ...] | None = None   # H1 signal-bar open times (ET minutes); drawn from empirically
 
 
 class RandomEntry:
@@ -32,6 +34,7 @@ class RandomEntry:
         self.inst, self.p, self.name = instrument, params, strategy_id
         self._first, self._last = hhmm(params.first_signal_bar), hhmm(params.last_signal_bar)
         self._exit = hhmm(params.time_exit)
+        self._match_set = frozenset(params.match_days or ())
         self._tracker = SessionTracker(require_contract=require_contract)
         self.reset()
 
@@ -44,7 +47,10 @@ class RandomEntry:
     def _draw(self, d: dt.date):
         rng = np.random.default_rng([self.p.seed, self.p.rep, d.toordinal()])
         n_bars = (self._last - self._first) // BAR_MIN + 1
-        bar_tod = self._first + BAR_MIN * int(rng.integers(0, n_bars))
+        if self.p.match_tods:
+            bar_tod = int(rng.choice(np.asarray(self.p.match_tods, dtype=int)))
+        else:
+            bar_tod = self._first + BAR_MIN * int(rng.integers(0, n_bars))
         side = 1 if rng.random() < 0.5 else -1
         if self.p.stop_distances_pts:
             dist = float(rng.choice(np.asarray(self.p.stop_distances_pts, dtype=float)))
@@ -57,6 +63,8 @@ class RandomEntry:
     def on_bar(self, ts_open, o, h, l, c, v, contract) -> Signal | None:
         ctx = self._tracker.update(ts_open, h, l, contract)
         if ctx.phase != "RTH" or ctx.tod < self._first or ctx.tod > self._last:
+            return None
+        if self.p.match_days is not None and ctx.date.isoformat() not in self._match_set:
             return None
         if self._plan_day != ctx.date:
             self._plan_day, self._plan = ctx.date, self._draw(ctx.date)

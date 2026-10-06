@@ -59,7 +59,7 @@ class _Pos:
     exit_is_time: bool
 
 
-def validate_bars(bars: pd.DataFrame) -> None:
+def validate_bars(bars: pd.DataFrame, bar_minutes: int = 5) -> None:
     missing = [c for c in BAR_COLUMNS if c not in bars.columns]
     if missing:
         raise ValueError(f"bars missing columns {missing}")
@@ -70,6 +70,16 @@ def validate_bars(bars: pd.DataFrame) -> None:
         raise ValueError("bars index must be sorted ascending and unique")
     if bars[["open", "high", "low", "close"]].isna().any().any():
         raise ValueError("bars contain NaN prices")
+    o, h, l, c = (bars[k] for k in ("open", "high", "low", "close"))
+    bad = (h < l) | (h < o) | (h < c) | (l > o) | (l > c) | (l <= 0)
+    if bad.any():
+        raise ValueError(f"{int(bad.sum())} corrupt bars (need high>=max(o,c,l), low<=min(o,c,h), prices>0); "
+                         f"first at {bars.index[bad.to_numpy()][0]}")
+    if len(idx) >= 2:
+        modal = pd.Series(idx[1:] - idx[:-1]).mode().iloc[0]
+        if modal != pd.Timedelta(minutes=bar_minutes):
+            raise ValueError(f"bars must be {bar_minutes}-minute bars (modal step is {modal}); "
+                             "resample first with data.loader.resample_bars")
 
 
 def _round_tick(x: float, tick: float, mode: str) -> float:
@@ -79,7 +89,7 @@ def _round_tick(x: float, tick: float, mode: str) -> float:
 
 
 def run_backtest(bars: pd.DataFrame, strategy: StreamingStrategy, cfg: EngineConfig) -> BacktestResult:
-    validate_bars(bars)
+    validate_bars(bars, cfg.bar_minutes)
     inst, cm = cfg.instrument, cfg.cost
     tick, pv = inst.tick_size, inst.point_value
     step = pd.Timedelta(minutes=cfg.bar_minutes)
@@ -161,7 +171,7 @@ def run_backtest(bars: pd.DataFrame, strategy: StreamingStrategy, cfg: EngineCon
             p = pos
             if not entry_bar and (date != p.date or ctr != p.contract or ts != idx[i - 1] + step):
                 diag["exit_discontinuity"] += 1
-                close_pos(i - 1, Cl[i - 1], idx[i - 1] + step, "eod", C.MARKET_EXIT, i - 1 - p.entry_i + 1)
+                close_pos(i - 1, Cl[i - 1], idx[i - 1] + step, "gap_exit", C.MARKET_EXIT, i - 1 - p.entry_i + 1)
             else:
                 s = p.side
                 gap_stop = (o >= p.stop) if s == -1 else (o <= p.stop)

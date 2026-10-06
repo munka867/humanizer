@@ -25,14 +25,22 @@ def load_yaml(path: str | Path) -> dict[str, Any]:
 
 
 def variant_id(cfg: dict, overrides: dict | None) -> str:
-    vid = cfg["id"]
-    if overrides:
-        vid += "@" + ",".join(f"{k}={overrides[k]}" for k in sorted(overrides))
-    return vid
+    """Fully qualified id: every grid key with its effective value (R-08), e.g. H1_..._v1@levels=both,target_r=2.0."""
+    grid = cfg.get("grid", {}) or {}
+    if not grid:
+        return cfg["id"]
+    eff = {**cfg.get("params", {}), **(overrides or {})}
+    return cfg["id"] + "@" + ",".join(f"{k}={eff[k]}" for k in sorted(grid))
+
+
+def assert_logged(vid: str, log_path: str | Path) -> None:
+    text = Path(log_path).read_text()
+    if f"| {vid} |" not in text:
+        raise ValueError(f"variant {vid!r} is not registered in {log_path}; register it BEFORE running (CLAUDE.md)")
 
 
 def build(cfg: dict, cost_path: str | Path, scenario: str = "x1",
-          overrides: dict | None = None, **extra_params):
+          overrides: dict | None = None, require_logged: str | Path | None = None, **extra_params):
     """Return (strategy, EngineConfig, params_dict). `overrides` must be keys of the grid (logged variants)."""
     inst = INSTRUMENTS[cfg.get("instrument", "MES")]
     params = dict(cfg.get("params", {}))
@@ -46,7 +54,13 @@ def build(cfg: dict, cost_path: str | Path, scenario: str = "x1",
     if "stop_distances_pts" in params and params["stop_distances_pts"] is not None:
         params["stop_distances_pts"] = tuple(params["stop_distances_pts"])
     cls, pcls = STRATEGIES[cfg["strategy"]]
-    strat = cls(inst, pcls(**params), strategy_id=variant_id(cfg, overrides))
+    vid = variant_id(cfg, overrides)
+    if require_logged is not None:
+        assert_logged(vid, require_logged)
+    for k in ("match_days", "match_tods"):
+        if params.get(k) is not None:
+            params[k] = tuple(params[k])
+    strat = cls(inst, pcls(**params), strategy_id=vid)
     e = cfg.get("engine", {})
     ecfg = EngineConfig(instrument=inst, cost=load_cost_model(cost_path, scenario), **e)
     return strat, ecfg, params

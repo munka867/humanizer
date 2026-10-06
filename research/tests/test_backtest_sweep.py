@@ -120,7 +120,7 @@ def test_half_day_rule_and_skip():
     assert is_half_day(dt.date(2025, 7, 3)) and not is_half_day(dt.date(2026, 7, 3))
     assert not is_half_day(dt.date(2026, 11, 20)) and not is_half_day(dt.date(2026, 12, 25))
     res = go(history("2026-12-24", "2026-12-23", {"10:30": SHORT_SWEEP}))
-    assert res.signals == [] and res.diagnostics["strategy_skip_half_day"] > 0
+    assert res.signals == [] and res.diagnostics["strategy_skip_holiday_or_half_day"] > 0
 
 
 def test_roll_day_and_day_after_skipped():
@@ -175,3 +175,15 @@ def test_params_validation():
         strat(levels="x")
     with pytest.raises(ValueError):
         strat(first_signal_bar="09:30")
+
+
+@pytest.mark.parametrize("day,prev", [("2026-05-25", "2026-05-22"), ("2026-02-16", "2026-02-13"),
+                                      ("2026-09-07", "2026-09-04"), ("2026-06-19", "2026-06-18")])
+def test_holiday_candidate_days_skipped(day, prev):   # Memorial, Presidents, Labor, Juneteenth
+    assert go(history(day, prev, {"10:30": SHORT_SWEEP})).signals == []
+
+
+def test_day_after_holiday_skipped_when_prev_levels_needed():
+    # Tue 2026-05-26 follows Memorial Day: previous "session" is a holiday-candidate date
+    assert go(history("2026-05-26", "2026-05-25", {"10:30": SHORT_SWEEP})).signals == []
+    assert len(go(history("2026-05-27", "2026-05-26", {"10:30": SHORT_SWEEP})).signals) == 1

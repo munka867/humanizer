@@ -115,7 +115,13 @@ def load_bars(path, tz_hint: str | None = None, timestamp_label: str = "open", b
             raise ValueError(f"non-numeric values in column {c!r}")
         out[k] = v.astype("float64").to_numpy()
     df = pd.DataFrame(out, index=ts)
-    ccol = _find(cols, ["contract", "localsymbol", "symbol"])
+    ccol = _find(cols, ["contract", "localsymbol"])
+    if ccol is None and "symbol" in cols:
+        # R-06: a root symbol ("MES") is not a contract label; accept 'symbol' only if EVERY value carries a
+        # month/year code (e.g. MESZ4, ESH25), otherwise roll detection would be silently disabled.
+        sym = raw[cols["symbol"]].astype(str).str.strip()
+        if sym.str.fullmatch(r"[A-Z0-9]{1,4}[FGHJKMNQUVXZ]\d{1,2}").all():
+            ccol = cols["symbol"]
     if ccol is not None:
         df["contract"] = raw[ccol].to_numpy()
     elif contract:

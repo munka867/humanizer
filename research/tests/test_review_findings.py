@@ -23,8 +23,6 @@ def h1(bars):
 
 
 # ---- R-02 abbreviated holiday sessions are traded
-@pytest.mark.xfail(strict=True, reason="R-02: only half-days (Dec24/Jul3/Fri after Thanksgiving) are skipped; "
-                   "MLK/Presidents/Memorial/Labor/Juneteenth abbreviated sessions are traded")
 def test_memorial_day_is_not_traded():
     bars = history("2025-05-27", "2025-05-23", over={"09:35": SHORT_SWEEP})   # Tue baseline sanity below
     assert len(h1(bars).trades) == 1                                           # a normal day does trade
@@ -33,7 +31,6 @@ def test_memorial_day_is_not_traded():
 
 
 # ---- R-03 bar spacing not validated
-@pytest.mark.xfail(strict=True, reason="R-03: 1-minute bars are accepted; every day is silently skipped as 'data_gap_today'")
 def test_one_minute_bars_rejected_not_silently_empty():
     b1 = make_synthetic_bars(3, start="2024-01-02", days=6)
     with pytest.raises(ValueError):
@@ -41,7 +38,6 @@ def test_one_minute_bars_rejected_not_silently_empty():
 
 
 # ---- R-04 engine accepts corrupt OHLC
-@pytest.mark.xfail(strict=True, reason="R-04: validate_bars does not check high>=max(o,c), low<=min(o,c), tick grid, or data quality")
 def test_engine_rejects_high_below_low():
     bars = history("2025-03-04", "2025-03-03")
     bars.iloc[300, bars.columns.get_loc("high")] = bars.iloc[300]["low"] - 5
@@ -50,7 +46,6 @@ def test_engine_rejects_high_below_low():
 
 
 # ---- R-05 run_backtest.py bypasses the tolerant loader: naive local timestamps silently read as UTC
-@pytest.mark.xfail(strict=True, reason="R-05: scripts/run_backtest.py reads CSV with pd.to_datetime(utc=True): naive ET stamps become UTC silently")
 def test_run_backtest_script_rejects_naive_timestamps(tmp_path):
     b = history("2025-03-04", "2025-03-03", over={"09:35": SHORT_SWEEP})
     naive = b.copy()
@@ -62,7 +57,6 @@ def test_run_backtest_script_rejects_naive_timestamps(tmp_path):
 
 
 # ---- R-06 loader accepts 'symbol' as the contract label
-@pytest.mark.xfail(strict=True, reason="R-06: 'symbol'='MES' (constant) is taken as the contract label, so rolls are undetectable")
 def test_loader_does_not_treat_root_symbol_as_contract(tmp_path):
     p = tmp_path / "x.csv"
     p.write_text("timestamp,open,high,low,close,volume,symbol\n2024-03-04T14:30:00Z,1,2,0.5,1.5,10,MES\n"
@@ -72,8 +66,6 @@ def test_loader_does_not_treat_root_symbol_as_contract(tmp_path):
 
 
 # ---- R-07 / R-01 B0 trades every eligible day, not the days H1 trades
-@pytest.mark.xfail(strict=True, reason="R-07: B0 draws one trade on every eligible day; H1 trades only sweep days, so "
-                   "'95th percentile of B0 replication means' is a looser null than a matched-n comparison")
 def test_b0_days_match_h1_days(tmp_path):
     b = resample_bars(make_synthetic_bars(7, start="2024-01-02", days=90), "5min")
     p = tmp_path / "SYNTHETIC_b.csv"; b.to_csv(p, index_label="ts_open")
@@ -86,7 +78,6 @@ def test_b0_days_match_h1_days(tmp_path):
 
 
 # ---- R-08 default variant id is not in the experiment log
-@pytest.mark.xfail(strict=True, reason="R-08: running the config without overrides yields an id absent from EXPERIMENT_LOG")
 def test_every_runnable_variant_id_is_logged():
     log = (ROOT / "docs" / "EXPERIMENT_LOG.md").read_text()
     for name in ("strategy_sweep_reversal", "strategy_orb", "strategy_random_entry"):

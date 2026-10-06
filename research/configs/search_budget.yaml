@@ -1,0 +1,6 @@
+# Set BEFORE any optimisation. Changing it after seeing results must be logged in EXPERIMENT_LOG.md.
+max_variants_total: 24          # all strategy/parameter variants evaluated on train+validation combined
+max_param_values_per_param: 3
+final_test_evaluations_allowed: 1
+multiple_testing: "report Bonferroni-adjusted p and Deflated-Sharpe-style haircut using n_variants_tried"
+seed: 20261006

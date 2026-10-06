@@ -1,0 +1,12 @@
+[project]
+name = "tradelab"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = ["numpy==2.5.3", "pandas==3.0.5", "PyYAML==6.0.1"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

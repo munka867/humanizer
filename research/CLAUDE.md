@@ -11,8 +11,10 @@ Do not optimise for an impressive backtest.
   position, kill switch) with tests — not in prompts.
 - Never invent data, trades, results, citations or profitability. Synthetic data lives in `data/fixtures/`,
   must be labelled `SYNTHETIC` in filename and metadata, and is used ONLY to test software.
-- YouTube channels (@deltatrendtrading, @TTrades_edu) are hypothesis sources. This sandbox cannot reach
-  YouTube; transcripts accessed so far: NONE. Record exactly what was accessed in docs/SOURCES.md.
+- YouTube channels (@deltatrendtrading, @TTrades_edu) are hypothesis sources. Transcripts are read via the
+  Firecrawl youtube/read capability (no charts/visuals). Record exactly what was accessed in docs/SOURCES.md.
+- IBKR connector: user authorised READ-ONLY MARKET DATA only (2026-10-06). Never read account balances,
+  positions, orders or trades; never call create_order_instruction, alerts or watchlist tools.
 - Only information available at the decision time may be used (no look-ahead). Conservative intrabar fills:
   if stop and target are both touched in one bar, assume the STOP filled first.
 - Chronological train / validation / final-test split. Purge so trades cannot straddle boundaries.

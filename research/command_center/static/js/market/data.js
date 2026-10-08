@@ -33,12 +33,13 @@ export const loadMarkers = (ctx, ins) => ctx.api.get(`/api/markers?symbol=${enco
 export const loadBars = (ctx, ins, interval) => ctx.api.get(`/api/bars?symbol=${encodeURIComponent(ins.symbol)}&exchange=${encodeURIComponent(ins.exchange)}&conid=${ins.conid}&interval=${interval}`);
 
 /** Selected instrument: URL params (?symbol&conid&ex) win, then pref, then first available. */
-export function pickSelected(ctx, instruments, params) {
+export function pickSelected(ctx, instruments, params, firstOfList = null) {
   const byKey = new Map(instruments.map((i) => [i.key, i]));
   if (params?.conid && params?.ex && byKey.has(`${params.conid}:${params.ex}`)) return byKey.get(`${params.conid}:${params.ex}`);
   if (params?.symbol) { const m = instruments.filter((i) => i.symbol === String(params.symbol).toUpperCase()); if (m.length === 1) return m[0]; }
   const saved = ctx.prefs.get("market.selected", null);
   if (saved && byKey.has(saved)) return byKey.get(saved);
+  if (firstOfList && byKey.has(firstOfList)) return byKey.get(firstOfList);
   return instruments[0] || null;
 }
 export const saveSelected = (ctx, ins) => { try { ctx.prefs.set("market.selected", ins.key); } catch { /* prefs rejected: keep in memory only */ } };

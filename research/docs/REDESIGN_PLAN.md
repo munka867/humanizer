@@ -36,7 +36,7 @@ Change% is vs prior regular-session close. Daily bars only: no intraday interval
 
 ## Checklist (update as items become genuinely functional; link evidence)
 - [ ] 1 Audit + tokens + components  - [ ] 2 Shell, nav, top bar, Command Center  - [x] 3 Stocks & Charts, watchlists, positions/orders tables, Command Center screen (MARKET; verified 2026-10-08: command_center/verify_market.py 42/42 on SYNTHETIC fixtures and on real local files, tests/test_cc_market*.py; screenshots/after/market-*.png)
-- [ ] 4 Agent Team tower view + inspector  - [x] 5 Research, experiments, results, data import (verified 2026-10-08: command_center/verify_research.py 55/55, tests/test_cc_research*.py; screenshots/after/research-*.png)  - [ ] 6 Risk/execution controls (no order path)
+- [x] 4 Agent Team tower view + inspector (verified 2026-10-08: tests/test_cc_agents_ui.py + command_center/verify_agents.py, screenshots/after/agents-*.png)  - [x] 5 Research, experiments, results, data import (verified 2026-10-08: command_center/verify_research.py 55/55, tests/test_cc_research*.py; screenshots/after/research-*.png)  - [ ] 6 Risk/execution controls (no order path)
 - [ ] 7 Visual QA at 1920x1080, 1440x900, 1280x720 + responsive; before/after screenshots  - [ ] 8 Journeys + security review
 
 ## Polish list (coordinator, from real-data screenshots 2026-10-08)

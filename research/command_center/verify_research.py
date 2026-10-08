@@ -114,6 +114,8 @@ def journeys(page, errors):
     page.locator('select[aria-label="State filter"]').select_option("rejected")
     check("state filter works", page.locator('table:has(caption:text-is("Strategy registry")) tbody tr.tbl-row').count() == 2)
     page.locator('select[aria-label="State filter"]').select_option("all")
+    ov = page.evaluate("(() => { const w = document.querySelector('.tbl-scroll'); return w.scrollWidth - w.clientWidth; })()")
+    check("strategy table does not scroll horizontally at 1440x900", ov <= 0, str(ov))
     shots(page, "strategies")
     page.locator('table:has(caption:text-is("Strategy registry")) tbody tr.tbl-row', has_text="V3 short-only").click()
     wait(page, ".drawer .rs-card")

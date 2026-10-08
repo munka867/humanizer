@@ -161,7 +161,7 @@ export function derive(events) {
     counted[a].add(key); agents[a].completed += 1;
   }
   for (const tk of tasks.values()) {
-    tk.depends_on = deps.filter((d) => d.task_id === tk.task_id).map((d) => d.depends_on);
+    tk.depends_on = [...new Set(deps.filter((d) => d.task_id === tk.task_id).map((d) => d.depends_on))];
     tk.unmet = tk.depends_on.filter((d) => tasks.get(d)?.status !== "complete");
     const ag = agents[tk.owner]; if (!ag) continue;
     if (tk.status === "queued") ag.queued += 1;

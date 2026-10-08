@@ -177,8 +177,8 @@
 .ag-timeline .tbl-row.is-sel, .ag-list .tbl-row.is-sel { background: var(--info-bg); box-shadow: inset 3px 0 0 var(--accent); }
 .ag-timeline .tbl-table td, .ag-deps .tbl-table td { font-size: 13px; }
 .ag-list .tbl-table td { white-space: normal; vertical-align: top; }
-.ag-board { display: grid; grid-template-columns: repeat(auto-fit, minmax(176px, 1fr)); gap: var(--s2); }
-.ag-col { display: grid; gap: var(--s2); align-content: start; padding: var(--s2); background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-md); max-height: 260px; overflow: auto; }
+.ag-board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(172px, 1fr); gap: var(--s2); overflow-x: auto; padding-bottom: 4px; }
+.ag-col { display: grid; gap: var(--s2); align-content: start; padding: var(--s2); background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-md); max-height: 232px; overflow-y: auto; }
 .ag-col-h { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .ag-col-n { font-variant-numeric: tabular-nums; color: var(--text-2); font-size: var(--fs-secondary); }
 .ag-task { display: grid; gap: 2px; padding: var(--s2); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-sm); font-size: 13px; cursor: pointer; overflow-wrap: anywhere; }

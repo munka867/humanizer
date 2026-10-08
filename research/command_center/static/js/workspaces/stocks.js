@@ -44,14 +44,15 @@ export default {
     mgr = createWatchManager(ctx, S, { onSelect: (r) => select(universe.find((u) => u.key === r.key) || r), getSelected: () => selected });
     host.replaceChildren(notice, topRow, mgr.el);
 
-    S.load();
+    const loading = S.load();
     try {
+      await loading;
       universe = (await loadInstruments(ctx)).instruments;
       const q = params.symbol && !params.conid ? universe.filter((u) => u.symbol === String(params.symbol).toUpperCase()) : [];
       if (q.length > 1) {
         notice.replaceChildren(el("div", { class: "mk-pad" }, el("b", {}, `Several instruments share the ticker ${params.symbol}. Choose by exchange and conId: `), ...q.map((u) => ui.btn(`${u.symbol} · ${u.exchange} · ${u.conid}`, { onClick: () => select(u) }))));
         selected = null; drawDetails();
-      } else select(pickSelected(ctx, universe, params), false);
+      } else select(pickSelected(ctx, universe, params, S.rows()[0]?.key), false);
     } catch (e) { chartP.el.append(ui.empty("Instruments unavailable", e.message, { label: "Retry", kind: "default", onClick: () => ctx.nav("stocks") })); }
     dispose.push(() => mgr?.destroy(), () => chartP.destroy());
   },

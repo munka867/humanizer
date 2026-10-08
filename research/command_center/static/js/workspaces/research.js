@@ -3,6 +3,7 @@ import { el } from "../core/dom.js";
 import { useCss, errText, field, selectEl, textInput, kv, note, stateBadge, verdictBadge, card } from "../research/kit.js";
 import { openDoc } from "../research/docviewer.js";
 
+const clamp = (t) => el("span", { class: "clamp2", title: t }, t);
 const REFUSAL_HINT = "approved_paper and approved_live are shown so the refusal is visible: the server will refuse and record the attempt.";
 
 export default {
@@ -36,13 +37,13 @@ export default {
         onRowActivate: (s) => openDetail(s.id), onRowClick: (s) => openDetail(s.id),
         emptyTitle: "No strategies match", emptyWhy: "Change the filters. The registry itself is configs/strategies.json.",
         columns: [
-          { key: "name", label: "Strategy", width: 250, value: (s) => s.name },
-          { key: "family", label: "Family", width: 70 },
-          { key: "state", label: "State", width: 140, render: (s) => stateBadge(ctx, s.state) },
-          { key: "verdict", label: "Pipeline verdict", width: 170, value: (s) => s.verdict, render: (s) => verdictBadge(ctx, s.verdict), missing: "No run has produced a verdict" },
-          { key: "version", label: "Version", width: 170 },
-          { key: "n_exp", label: "Experiments", align: "num", width: 110, value: (s) => s.experiments.length, format: "qty" },
-          { key: "note", label: "Status", width: 270, value: (s) => (s.runnable ? "Runnable. " : "Not runnable. ") + s.status_note },
+          { key: "name", label: "Strategy", width: 230, value: (s) => s.name, render: (s) => clamp(s.name) },
+          { key: "family", label: "Family", width: 56 },
+          { key: "state", label: "State", width: 125, render: (s) => stateBadge(ctx, s.state) },
+          { key: "verdict", label: "Pipeline verdict", width: 160, value: (s) => s.verdict, render: (s) => verdictBadge(ctx, s.verdict), missing: "No run has produced a verdict" },
+          { key: "version", label: "Version", width: 150, render: (s) => clamp(s.version) },
+          { key: "n_exp", label: "Experiments", align: "num", width: 96, value: (s) => s.experiments.length, format: "qty" },
+          { key: "note", label: "Status", width: 275, value: (s) => (s.runnable ? "Runnable. " : "Not runnable. ") + s.status_note, render: (s) => clamp((s.runnable ? "Runnable. " : "Not runnable. ") + s.status_note) },
         ] });
       tableSlot.replaceChildren(tbl.el);
     };

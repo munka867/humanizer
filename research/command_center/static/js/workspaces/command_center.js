@@ -56,9 +56,9 @@ export default {
     const evBox = el("ul", { class: "mk-events", "aria-label": "Recent events" }), riskBox = el("div", { class: "mk-risk" }), freshBox = el("ul", { class: "mk-fresh", "aria-label": "Data freshness" });
     const sec = (t, ...k) => el("section", { class: "mk-sec" }, el("h3", { class: "mk-h3" }, t), ...k);
     sidePanel.append(el("div", { class: "mk-side-in" }, sec("Recent events", evBox), sec("Risk", riskBox), sec("Data freshness", freshBox)));
-    const evSummary = (e) => { const p = e.payload || {}; return String(p.summary || p.preview || p.title || p.task || p.message || p.status || p.mode || "").slice(0, 120); };
+    const evSummary = (e) => { const p = e.payload || {}; if (e.event_type === "test.result" && p.name) return `${p.name}: ${p.outcome || "?"}${p.detail ? " (" + p.detail + ")" : ""}`; return String(p.summary || p.preview || p.title || p.task || p.message || p.status || p.mode || "").slice(0, 120); };
     const drawEvents = () => {
-      const recent = ctx.events.recent(4).slice().reverse();
+      const recent = ctx.events.recent(3).slice().reverse();
       evBox.replaceChildren(...(recent.length ? recent.map((e) => el("li", { class: "mk-ev" }, el("span", { class: "mk-ev-t muted num" }, fmt.time(e.timestamp_utc, { date: false, seconds: false })), el("span", { class: "mk-ev-type" }, e.event_type), el("span", { class: "mk-ev-sum" }, `${e.agent_id ? e.agent_id + ": " : ""}${evSummary(e)}`))) : [el("li", { class: "muted" }, "No events received yet. Events appear here as agents and tools report in.")]));
     };
     const drawRisk = () => {
@@ -111,7 +111,7 @@ export default {
 
     // ---- data
     S.load().then(async () => {
-      try { const u = await loadInstruments(ctx); selected = pickSelected(ctx, u.instruments, params); } catch { selected = null; }
+      try { const u = await loadInstruments(ctx); selected = pickSelected(ctx, u.instruments, params, S.rows()[0]?.key); } catch { selected = null; }
       if (!selected) { chartP.el.querySelector(".mk-cwrap").replaceChildren(ui.empty("No instrument selected", "No instruments with daily data are available. Check Data & Connections.", { label: "Open Data & Connections", onClick: () => ctx.nav("data") })); return; }
       select(selected);
     });

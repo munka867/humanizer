@@ -1,0 +1,132 @@
+[
+ {
+  "check": "connection badge LIVE",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "7 towers render",
+  "pass": true,
+  "detail": "7"
+ },
+ {
+  "check": "DEMO banner visible",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "mode badge present",
+  "pass": true,
+  "detail": "MODE: DEMO"
+ },
+ {
+  "check": "PAPER/LIVE blocked buttons",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "dependency edges dashed (present)",
+  "pass": true,
+  "detail": "3"
+ },
+ {
+  "check": "delegation message edges present",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "no edge pulsing on initial load",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "side panel states reasoning not shown",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "side panel lists tool activity/artifact",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "keyboard arrow moves focus",
+  "pass": true,
+  "detail": "backtester"
+ },
+ {
+  "check": "keyboard Enter opens panel",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "emit.py accepted",
+  "pass": true,
+  "detail": "{\"ok\": true, \"accepted\": [{\"event_id\": \"ea491c8baaf442f7815ea7f0181b85a9\", \"seq\": 34}], \"duplicates\": [], \"rejected\": []"
+ },
+ {
+  "check": "emitted message.sent pulses lead>backtester edge",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "feed shows live event",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "pulse ends after a few seconds",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "reload restores same seq + live event",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "replay: mode badge REPLAY",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "Execution console says not implemented + blocked",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "Research library lists docs",
+  "pass": true,
+  "detail": "17"
+ },
+ {
+  "check": "server killed -> UI leaves LIVE (reconnecting)",
+  "pass": true,
+  "detail": "\u21bb RECONNECTING"
+ },
+ {
+  "check": "STALE banner text",
+  "pass": true,
+  "detail": "STALE: showing last known state as of 04:17:55"
+ },
+ {
+  "check": "STALE greys the UI",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "server restart -> UI returns to LIVE without reload",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "no uncaught page errors",
+  "pass": true,
+  "detail": "Failed to load resource: net::ERR_CONNECTION_REFUSED; Failed to load resource: net::ERR_CONNECTION_REFUSED; Failed to load resource: net::ERR_CONNECTION_REFUSED; Failed to load resource: net::ERR_CONN"
+ },
+ {
+  "check": "no external network requests",
+  "pass": true,
+  "detail": "[]"
+ }
+]

@@ -138,3 +138,116 @@ Cost inputs are unverified assumptions (`configs/costs_mes.yaml`); 5-minute bars
 only the both-touched case); no queue/partial-fill model for the target limit (1-tick trade-through is the proxy);
 fills at the next open assume 0.75 tick total entry cost even right after a sweep spike; closed-trade drawdown only;
 validation is consumed by variant selection (13 logged variants + any design decision revisited); one regime/sample.
+
+---
+
+# Daily pipeline audit (phase 3)
+
+Scope: `docs/DAILY_SPEC.md`, `src/tradelab/daily/*`, `scripts/run_daily.py`, `configs/daily_*.yaml`, `docs/DAILY_RESULTS.md`,
+experiment-log rows. Tests: `tests/test_review_daily_audit.py` (7 pass, 2 strict-xfail reproducers). Hard rules observed: the sealed
+test segment was NOT run or evaluated and no test-segment returns were computed or viewed; no broker tools were called; no raw prices printed.
+The only test-window information used is bar-count / label counts (e.g. "197 test-labelled candidates per symbol", needed for D-04).
+
+Severity count: **HIGH 0, MEDIUM 1, LOW 7, INFO 3.** No look-ahead, rule-fidelity or arithmetic bug found.
+
+## Verdict on V1
+**I agree: V1 = REJECTED follows from the pre-registered rule as written.** DAILY_SPEC: "REJECTED ... if train/val net EV <= 0 at 1.0x costs
+with n >= 30". Train pooled net EV = -$5.32/trade (n = 471 trades on about 297 distinct dates), reproduced independently (below), so
+`classify_development` correctly returns REJECTED on its first branch (`test_v1_rejection_follows_pre_registered_rule_literally`).
+Caveat (D-02): this is a point-estimate screen, not evidence that EV is negative. The train 95% day-block CI is [-16.5, +6.0], the validation EV is
++$1.91 with CI [-26.6, +29.5], B_D1 percentiles 0.25 / 0.66. Statistically the honest reading is "no detectable edge; sample far too small to
+distinguish +-$20/trade", and the pooled-by-instrument n (471) overstates independent information.
+
+## Independent re-implementation (task 4) - matches exactly
+Loop code written from the spec text only (own ATR, own signal rule, own cost formula, own split arithmetic), train+validation only:
+
+| variant | segment | n (mine = worker) | net total $ (mine = worker) |
+|---|---|---|---|
+| V1 | train / validation | 471 / 152 | -2506.85 / +289.60 |
+| V2 | train / validation | 236 / 76 | -4348.38 / -361.66 |
+| V3 | train / validation | 235 / 76 | +1841.54 / +651.25 |
+
+Per-symbol counts equal as well (e.g. V1 train SPY/QQQ/IWM 148/155/168). Gross totals also agree (V1 train -1315.54, validation +665.95).
+Both implementations share my reading of ambiguous wording (simple-mean ATR, entry slippage 1 bp / exit 0.5 bp), so this validates coding, not interpretation.
+
+## Findings
+
+### D-01 MEDIUM - B_D1 null draws instruments independently; signals cluster by date (anti-conservative)
+`src/tradelab/daily/baselines.py:200-218` (and DAILY_SPEC "per instrument"). In train+validation the three ETFs share signal dates far more
+than chance: V3 train has 158 distinct dates for 235 trades vs about 205 expected under independence (V1 297 vs 356; validation V3 52 vs 67).
+Quantified with a date-shuffle null (one random permutation of eligible dates applied jointly to every instrument, which preserves the
+observed cross-instrument overlap and side labels; 10,000 draws, scratch script, not committed):
+
+| variant, segment | null sd independent -> date-matched | one-sided p independent -> date-matched | percentile independent -> date-matched |
+|---|---|---|---|
+| V3 train | 5.61 -> 6.72 | 0.020 -> 0.048 | 0.980 -> 0.952 |
+| V3 validation | 13.79 -> 17.10 | 0.082 -> 0.123 | 0.918 -> 0.877 |
+| V1 train | 4.29 -> 5.20 | 0.752 -> 0.703 | 0.248 -> 0.297 |
+| V1 validation | 10.33 -> 13.29 | 0.338 -> 0.361 | 0.662 -> 0.639 |
+| V2 train | 5.60 -> 6.72 | 0.999 -> 0.994 | 0.001 -> 0.006 |
+
+Null sd is understated by about 20-30%, so "favourable" p-values are too small (DAILY_RESULTS says this "flatters the strategy slightly": direction
+correct, magnitude as above). No verdict changes (V3 train p = 0.048 is still far from Bonferroni N=16; V3 validation fails either way), but the
+`baseline_percentile` fed to the verdict is overstated for V3 (0.918 vs 0.877). Reproducer showing the extreme case:
+`test_independent_null_is_narrower_than_date_matched_null_when_signals_cluster`. Fix: report the date-matched null as primary (permute dates jointly,
+or block-permute by date), keep the independent one as a footnote; or compute p from the day-clustered bootstrap of (signal - null) differences.
+
+### D-02 INFO - REJECTED is a point-estimate rule
+`validation/verdict.py` (my own rule). A single negative point estimate with n >= 30 rejects, regardless of CI width; a true-zero strategy is rejected
+about half the time, and one with a small positive true EV is rejected often. For V1 here it is applied as pre-registered and is not misapplied, but
+the label should be read as "failed the pre-registered screen". Test: `test_reject_rule_is_a_point_estimate_screen_not_evidence_of_negative_ev`.
+Suggested (for any future pre-registration, not retroactively): reject on upper-CI < 0 or on two consecutive segments <= 0.
+
+### D-03 LOW - ATR warm-up silently removes signals (spec silent)
+`signals.py:60` requires ATR14 for eligibility; ATR is only used for the R normalisation (no stop). First 14 bars of each series cannot trade:
+2 / 3 / 4 raw C2 signals lost (QQQ / SPY / IWM) in train. DAILY_RESULTS discloses it. Impact negligible, no directional bias. Fix: compute R lazily
+(NaN R for those rows) and keep the trade.
+
+### D-04 LOW - the final bar's trade is dropped by the split (sealed-test impact)
+`scripts/run_daily.py:146` passes `first`/`last` = bar OPEN times to `make_split`, so the test segment ends at the last bar's open + 1 ns, while the
+last candidate trade (entry = last bar open, exit 16:00 NY the same day) has `exit_ts` after it: label counts show `straddle: 1` per symbol.
+Verified on real bars by labels only (no returns): the last candidate is classified `straddle` for SPY, QQQ and IWM. Up to 3 trades lost from the
+test segment. Not directional, but it changes the test n. Reproducer: `test_last_day_trade_is_not_dropped_by_the_split` (xfail strict, synthetic).
+Fix: pass `last = last_bar_open + 1 day` (or the last session close) to `make_split`.
+
+### D-05 LOW - strategy ids differ from the experiment log
+Trades carry `D3_V1_c2_both@universe=SPY|QQQ|IWM`; the log registers `D3-V1`. The "id must match EXPERIMENT_LOG" contract (and the final-test
+guard's strategy id) cannot be checked mechanically. Same class as R-08. Reproducer: `test_strategy_id_matches_experiment_log` (xfail strict). Fix: log the exact id.
+
+### D-06 LOW - cost model gaps / wording
+`engine.py:92-98`, `configs/daily_costs.yaml`. Arithmetic matches the spec exactly (2 x $0.35 + 2 x $0.005 x qty + 1 bp x entry notional + 0.5 bp x exit notional;
+x1.5/x2 scale all terms; `test_cost_arithmetic_by_hand`). Gaps (all flagged by the worker, none quantified): SEC/FINRA sell-side fees (roughly $0.3 per
+$10k sale, 3-5% of the V3 EV), short availability / margin-account requirement for the short side (V3 is the only positive variant), CAD<->USD FX, whole-share
+rounding (fractional shares cannot be sent as MOO/MOC orders), MOO/MOC cut-off times. Wording ambiguity "1 bp per side at the open, 0.5 bp at the close" is
+read as entry 1 bp / exit 0.5 bp (a short's entry is a sell at the open); the alternative reading (1 bp on both fills) would cost another 0.5 bp ($0.5/trade). Net: costs
+are probably mildly conservative for SPY/QQQ (1 bp at the open exceeds the quoted spread) and fair-to-light for IWM; direction of the error is not certain.
+
+### D-07 LOW - unadjusted prices around ex-dividend dates
+The C2 conditions compare day t with day t-1 on unadjusted prices; an ex-date drop of about 0.3-0.4% at the open shifts the comparisons toward bullish C2 on about 4
+ex-dates/year/ETF (roughly 5-6% of days across the sample). Not quantified (no dividend calendar in the repo). The holding period (open->close) itself is unaffected, as the
+spec says. Fix: adjust history for distributions, or drop ex-dates with a calendar.
+
+### D-08 LOW - freeze covers config, not code or data
+`run_daily.py:127-128`: `config_hash` hashes strategy + cost YAML only. Editing `src/tradelab/daily/*` or replacing `data/processed/*.csv` after the freeze changes results
+without changing the hash; `--freeze` does not require a clean git tree or record the data SHA. Fix: include git commit (clean-tree check) and the bars' sha256 in the frozen hash.
+
+### D-09 LOW - purge for 1-day trades
+`configs/daily_strategy.yaml` purge = 3 calendar days drops 4 trades per symbol (2 per boundary) when 1 day would do. Harmless and conservative; boundaries fall overnight
+(03:54 and 08:42 UTC), so no trade straddles. The segment-level `dropped_by_split` is reported. Noted, no change required.
+
+### D-10 INFO - pooled n and the n>=30 / sample-size gates
+Pooled trade counts treat three highly correlated ETFs as independent (train V1: 471 trades on about 297 dates). Gates in `verdict.py` use trade counts; day-level inference
+(t-test, bootstrap) is correctly clustered by NY entry date (`stats.day_codes`), so the p-values and CIs are not inflated by this, only the gates.
+
+### D-11 INFO - verified correct, nothing to fix
+* Spec fidelity: H*=max(h,o,c), L*=min(l,o,c) applied to all bars (it changes no train+validation signal: 0 differing days for all three ETFs); bearish/bullish C2 with strict
+  inequalities; outside day -> no signal (also correct when the close is inside the prior range); next-day check on calendar gap in [1,4] (data has gaps of 1-4 days only, no missing
+  weekdays); fill at the next bar's open, exit at that day's close; qty = $10,000 / entry open; R = net / (qty x ATR14), ATR14 simple mean of TR including the first valid TR at row 1.
+* Look-ahead: `signal_table` values at row t are identical on a prefix ending at t (`test_look_ahead_prefix_invariance`); the only forward reference is the DATE of t+1 (calendar), not prices.
+* Daily timestamps: all bars open 09:30 ET (13:30/14:30 UTC by DST); exit_ts 16:00 ET converted with DST; day key = NY entry date.
+* Verdict plumbing: `n_val_days` = distinct entry dates; Bonferroni N=16 on the two-sided day-level p; DSR from daily net P&L of days with trades (T = those days, V = 1/(T-1), documented);
+  `max_period_share` computed on the validation trades by month and treated as failing when total <= 0; `val_ci_*` come from the same day-block bootstrap; cost x1.5/x2 equal engine scaling.
+* Drift vs signal: B_D0 (always long) is about break-even after costs in train (-$1.51/trade, positive gross) so the open->close drift is small in this sample; the B_D1 null matches each
+  instrument's long/short counts, so long-heavy strategies get no free drift credit and shorts are compared with random shorts. SPY-short losses vs QQQ/IWM-short gains (validation n = 29/20/27, CIs
+  wide) are sample noise, not a bug.
+* Sealed-test protocol: `--segment test` requires one variant and a freeze record, goes through `evaluate_final_test`, and the stored result files contain no test-segment statistics.

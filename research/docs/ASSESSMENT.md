@@ -19,3 +19,15 @@ Practical constraint: a $600 account likely cannot meet MES margin and risk limi
 
 Next step: commit real MES/ES 5-minute (or 1-minute) data with a per-bar contract column to data/raw/, then run
 quality checks, baselines, and H1 on train/validation only. The final test is looked at once, after freezing.
+
+## Update 2026-10-08 — first real-data result (daily, train+validation only)
+H3 (daily candle-2 closure; SPY/QQQ/IWM, 4 years of delayed, unadjusted IBKR connector bars) was tested under
+DAILY_SPEC v1 on the first 80% of the data after an independent audit (docs/REVIEW.md, "Daily pipeline audit":
+0 high, 1 medium, 7 low; independent re-implementation matched counts and P&L).
+- V1 (both sides, primary): REJECTED by the pre-registered point-estimate rule (train net EV -$5.32/trade, n=471).
+  This is "no detectable edge", not proof of a negative edge: the 95% interval is about -$16 to +$6.
+- V2 long-only: rejected. V3 short-only: inconclusive (fails sample size, interval, multiple-testing, consistency and
+  concentration gates; random-null p rises from 0.082 to 0.123 with the date-matched null).
+- Final test segment: NOT touched and NOT spent. Not run for a rejected primary; running V3 alone would be post-hoc.
+- Intraday MES hypotheses (H1, H2) remain untested for lack of data.
+Overall status: no credible edge found so far; inconclusive for everything not yet testable.

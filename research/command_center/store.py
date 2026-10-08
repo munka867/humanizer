@@ -65,6 +65,9 @@ class Store:
                     except ValidationError as ex:
                         res["rejected"].append({"index": i, "error": str(ex)})
                         continue
+                    if self._db.execute("SELECT 1 FROM events WHERE event_id=?", (e["event_id"],)).fetchone():
+                        res["duplicates"].append(e["event_id"])  # checked first so duplicates never burn a seq number
+                        continue
                     cur = self._db.execute(
                         "INSERT OR IGNORE INTO events(event_id,event_type,timestamp_utc,run_id,agent_id,parent_task_id,"
                         "correlation_id,source,status,payload_version,payload) VALUES(?,?,?,?,?,?,?,?,?,?,?)",

@@ -19,5 +19,7 @@ None. No real data yet. Nothing here is evidence of profitability.
 ## 2026-10-06 data + research pass
 - IBKR connector probed (docs/DATA_FINDINGS.md): cannot supply enough intraday history. NO backtest run on it.
 - Read 2 TTrades + 1 DeltaTrend transcripts (docs/SOURCES.md); H2 registered, not run (docs/HYPOTHESES_TTRADES.md).
+## 2026-10-08 daily result
+- H3 daily on SPY/QQQ/IWM (train+validation): V1 rejected, V3 inconclusive; audit clean (no high findings); final test sealed.
 ## Next
 - User: commit intraday MES/ES (1m or 5m) CSVs to research/data/raw/ (see docs/DATA_REQUEST.md once written).

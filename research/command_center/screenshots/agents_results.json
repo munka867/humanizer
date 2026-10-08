@@ -42,12 +42,12 @@
  {
   "name": "1280x720: no horizontal page overflow, 7 towers, no clipped tower text",
   "ok": true,
-  "detail": "{\"docX\": false, \"minFont\": 15.156018518518518, \"clipped\": [], \"towers\": 7, \"tinyText\": [], \"scale\": 0.9971064814814815, \"density\": \"compact\"}"
+  "detail": "{\"docX\": false, \"minFont\": 14.55775462962963, \"clipped\": [], \"towers\": 7, \"tinyText\": [], \"scale\": 0.9971064814814815, \"density\": \"compact\"}"
  },
  {
   "name": "1280x720: graph text stays >= 12.4 px effective (density compact, scale 1.00)",
   "ok": true,
-  "detail": "min 15.2 []"
+  "detail": "min 14.6 []"
  },
  {
   "name": "1280x720: inspector is collapsed while nothing is selected (space goes to the graph)",
@@ -62,12 +62,12 @@
  {
   "name": "900x700: no horizontal page overflow, 7 towers, no clipped tower text",
   "ok": true,
-  "detail": "{\"docX\": false, \"minFont\": 12.454193548387096, \"clipped\": [], \"towers\": 7, \"tinyText\": [], \"scale\": 0.8193548387096774, \"density\": \"compact\"}"
+  "detail": "{\"docX\": false, \"minFont\": 13.150354609929078, \"clipped\": [], \"towers\": 7, \"tinyText\": [], \"scale\": 0.900709219858156, \"density\": \"compact\"}"
  },
  {
-  "name": "900x700: graph text stays >= 12.4 px effective (density compact, scale 0.82)",
+  "name": "900x700: graph text stays >= 12.4 px effective (density compact, scale 0.90)",
   "ok": true,
-  "detail": "min 12.5 []"
+  "detail": "min 13.2 []"
  },
  {
   "name": "900x700: inspector is collapsed while nothing is selected (space goes to the graph)",
@@ -102,12 +102,12 @@
  {
   "name": "backtester tower: role, Complete badge, task, elapsed, last event, queued/done, result preview",
   "ok": true,
-  "detail": "Backtester | Complete | Last task: H3 daily train/validation run | In status 1h 41m | Last 00:21:52 EDT | Queued 1 \u00b7 Done 1 | Test:PASS: pytest tests/test_daily_*.py (17 tests)"
+  "detail": "Backtester | Complete | Last task: H3 daily train/validation run | In status 1h 45m | Last 00:21:52 EDT | Queued 1 \u00b7 Done 1 | Test:PASS: pytest tests/test_daily_*.py (17 tests)"
  },
  {
   "name": "validator tower shows Complete + audit task text from events",
   "ok": true,
-  "detail": "Independent validator | Complete | Last task: Daily audit: 0 high, 1 medium, 7 low | In status 1h 41m | Last 00:21:45 EDT | Queued 0 \u00b7 Done 1 | Latest resultnone reported"
+  "detail": "Independent validator | Complete | Last task: Daily audit: 0 high, 1 medium, 7 low | In status 1h 45m | Last 00:21:45 EDT | Queued 0 \u00b7 Done 1 | Latest resultnone reported"
  },
  {
   "name": "no fabricated percentages / token / cost numbers on towers or summary",
@@ -227,7 +227,7 @@
  {
   "name": "emit.py posted a real message.sent",
   "ok": true,
-  "detail": "{\"ok\": true, \"accepted\": [{\"event_id\": \"0aff9bb3f807412fa11cfc7631249d94\", \"seq\": 49}], \"duplicates\": [], \"rejected\": []"
+  "detail": "{\"ok\": true, \"accepted\": [{\"event_id\": \"8813acc53f0347bc965a635d47306884\", \"seq\": 49}], \"duplicates\": [], \"rejected\": []"
  },
  {
   "name": "live message.sent pulses exactly that edge (and no other)",
@@ -237,12 +237,12 @@
  {
   "name": "hover/focus shows sender, recipient, timestamp and preview",
   "ok": true,
-  "detail": "validator to monitor, 02:02:53 EDT: Audit complete, 1 medium finding"
+  "detail": "validator to monitor, 02:07:46 EDT: Audit complete, 1 medium finding"
  },
  {
   "name": "click opens details with sender, recipient, time and preview",
   "ok": true,
-  "detail": "Message: monitor and validator | Sender | validator | Recipient | monitor | Time | 02:02:53 EDT | Preview | Audit complete, 1 medium finding | Kind | message | null | | This solid line exists because a message.sent event was recorded."
+  "detail": "Message: monitor and validator | Sender | validator | Recipient | monitor | Time | 02:07:46 EDT | Preview | Audit complete, 1 medium finding | Kind | message | null | | This solid line exists because a message.sent event was recorded."
  },
  {
   "name": "pulse stops by itself",
@@ -392,7 +392,7 @@
  {
   "name": "demo toggle labels everything DEMO (badge + banner + tower chips)",
   "ok": true,
-  "detail": "DEMO DATA. Generated in this browser to show how the tower works. It is not real activity and is never stored or sent to the server. null"
+  "detail": "DEMO DATA. Generated in this browser to show how the tower works. It is not real activity and is never stored or sent to the server."
  },
  {
   "name": "demo data is client-side only: server event count unchanged",
@@ -437,7 +437,7 @@
  {
   "name": "replay shows the labelled historical (original) timestamp",
   "ok": true,
-  "detail": "Original time 2026-10-07 23:02:47 EDT"
+  "detail": "Original time 2026-10-07 23:07:40 EDT"
  },
  {
   "name": "pause stops the replay (button reads Play)",
@@ -482,7 +482,7 @@
  {
   "name": "killing the server shows STALE honestly (banner explains, counters paused)",
   "ok": true,
-  "detail": "Event stream is stale. Towers show the last known state as of 2026-10-08 02:03:15 EDT; elapsed counters are paused. null"
+  "detail": "Event stream is stale. Towers show the last known state as of 2026-10-08 02:08:08 EDT; elapsed counters are paused."
  },
  {
   "name": "after reconnect the feed resumes with no duplicate events (rows == unique seqs == server events)",
@@ -532,7 +532,7 @@
  {
   "name": "800px graph: no horizontal page overflow",
   "ok": true,
-  "detail": "{\"docX\": false, \"minFont\": 12.16, \"clipped\": [], \"towers\": 7, \"tinyText\": [\"lead:badge badge-neutral:12.2\", \"lead:t-task is-empty:12.2\", \"lead:t-line t-counts:12.2\", \"data_ibkr:badge badge-neutral:12.2\", \"data_ibkr:t-task is-empty:12.2\", \"strategy_researcher:badge badge-neutral:12.2\", \"strategy_rese"
+  "detail": "{\"docX\": false, \"minFont\": 11.799976851851852, \"clipped\": [], \"towers\": 7, \"tinyText\": [\"lead:t-title:12.3\", \"lead:badge badge-neutral:11.8\", \"lead:t-task is-empty:12.3\", \"lead:t-line t-counts:12.3\", \"data_ibkr:t-title:12.3\", \"data_ibkr:badge badge-neutral:11.8\", \"data_ibkr:t-task is-empty:12.3\", \"s"
  },
  {
   "name": "without an API token the action reports 'Not recorded' (no fake success)",

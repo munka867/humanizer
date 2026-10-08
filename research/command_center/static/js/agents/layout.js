@@ -57,9 +57,10 @@ export function roundedPath(pts, r = 7) {
 
 /** makeLayout(density) -> {W,H,..., size, nodes, user, routes:{hier,msg,dep}, bands}.
  *  nodes[id] = {x,y,w,h,cx,cy}; routes.msg/dep are keyed by pairKey(a,b), each {a, b, pts, d} where the route is drawn from a to b. */
-export function makeLayout(density = "full") {
+export function makeLayout(density = "full", paneW = 0) {
   const full = density === "full";
-  const W = full ? 184 : 140, H = full ? 268 : 212, G = full ? 14 : 10;
+  const cw = paneW ? Math.max(126, Math.min(140, Math.floor((paneW - 24 - 40 - 50) / 6))) : 140;   // compact towers shrink a little so the row fits a narrow pane
+  const W = full ? 184 : cw, H = full ? 268 : 212, G = full ? 14 : 10;
   const LW = full ? 400 : 340, LH = full ? 140 : 128;
   const M = 20;
   const RW = SPECIALISTS.length * W + (SPECIALISTS.length - 1) * G;

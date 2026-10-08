@@ -24,7 +24,7 @@ export const fmt = {
   tz(v) { if (v === "UTC" || v === "America/New_York") TZ = v; return TZ; },
 
   /** num(v, dp=2): grouped decimal. */
-  num(v, dp = 2) { v = toNum(v); return isNum(v) ? signed(nf({ minimumFractionDigits: dp, maximumFractionDigits: dp }).format(v), v, false) : DASH; },
+  num(v, dp = 2) { if (dp && typeof dp === 'object') dp = Number.isInteger(dp.dp) ? dp.dp : 2; v = toNum(v); return isNum(v) ? signed(nf({ minimumFractionDigits: dp, maximumFractionDigits: dp }).format(v), v, false) : DASH; },
   /** money(v, {currency='USD', dp=2, sign=false, compact=false}): "$1,234.50", "−$3.20"; currency is ALWAYS shown (symbol or code). */
   money(v, { currency = "USD", dp = 2, sign = false, compact = false } = {}) {
     v = toNum(v); if (!isNum(v)) return DASH;

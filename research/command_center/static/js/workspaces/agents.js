@@ -211,8 +211,8 @@ export default {
       if (sig === bannerSig) return; bannerSig = sig;
       banner.hidden = !bn; if (!bn) { banner.replaceChildren(); return; }
       banner.className = `ag-banner is-${bn[0]}`;
-      banner.replaceChildren(ui.icon(bn[1], 16), el("span", {}, bn[2]),
-        S.newRun && !S.replay && !S.demo && bn[0] === "info" && bn[1] === "info" ? ui.btn("Switch to it", { onClick: () => switchRun(S.newRun) }) : null);
+      const sw = S.newRun && !S.replay && !S.demo && bn[0] === "info" && bn[1] === "info";
+      banner.replaceChildren(...[ui.icon(bn[1], 16), el("span", {}, bn[2].trim()), sw ? ui.btn("Switch to it", { onClick: () => switchRun(S.newRun) }) : null].filter(Boolean));
     }
     function renderOutcome() {
       const o = S.outcome; outcome.hidden = !o; if (!o) return;
@@ -230,13 +230,13 @@ export default {
     function openInspectorPanel() {
       if (isNarrow()) {
         if (insDrawer) return;
-        insDrawer = ui.drawer({ title: ROLE[S.selected].name, width: 480, label: "Agent inspector", content: (b) => b.append(inspector.el), onClose: () => { insDrawer = null; inspectorAside.append(inspector.el); if (S.selected) deselect(true); } });
+        insDrawer = ui.drawer({ title: `${ROLE[S.selected].name} (${S.selected})`, width: 480, label: "Agent inspector", content: (b) => b.append(inspector.el), onClose: () => { insDrawer = null; inspectorAside.append(inspector.el); if (S.selected) deselect(true); } });
       } else { rz.setWidth(rz.width()); }
     }
     function selectAgent(id, o = {}) {
       if (!AGENT_IDS.includes(id)) return;
       S.selected = id; inspector.show(id); openInspectorPanel();
-      insDrawer?.setTitle(ROLE[id].name);
+      insDrawer?.setTitle(`${ROLE[id].name} (${id})`);
       renderAll();
       if (o.keyboard || isNarrow()) later(() => inspector.focusHeading(), 40);
       later(() => graph.relayout(), 60);
@@ -355,7 +355,7 @@ export default {
     async function switchRun(runId) {
       if (!runId || runId === S.runId) return;
       if (S.replay) exitReplay(true);
-      S.selectedEvent = null;
+      S.selectedEvent = null; S.outcome = null; renderOutcome();
       await loadRun(runId);
     }
     function pickInitialRun() {
@@ -388,6 +388,7 @@ export default {
     // ------------------------------------------------------------------ replay
     function startReplay() {
       const base = baseEvents().slice(); if (!base.length) return;
+      S.outcome = null; renderOutcome();
       S.replayBase = base; S.replayIdx = 0;
       S.replay = createPlayer({ events: base, onChange: (st, revealed) => {
         S.replayIdx = st.idx; S.replayState = st;
@@ -424,6 +425,7 @@ export default {
 
     // ------------------------------------------------------------------ demo (separate client-side state)
     function toggleDemo() {
+      S.outcome = null; renderOutcome();
       if (S.replay) exitReplay(true);
       S.demo = !S.demo; S.selectedEvent = null; graph.resetEdges(); vKey = "";
       S.demoEvents = S.demo ? demoEvents() : [];
@@ -448,14 +450,6 @@ export default {
     mq.addEventListener("change", onMq); disposers.push(() => mq.removeEventListener("change", onMq));
 
     // ------------------------------------------------------------------ boot
-    renderAll();
-    try { const snap = await ctx.events.snapshot(); if (snap?.concurrency?.budget_max) S.budgetMax = snap.concurrency.budget_max; } catch { /* optional */ }
-    await loadRuns();
-    await loadRun(pickInitialRun());
-    // deep link: #/agents?agent=backtester
-    const p0 = ctx.route?.params || {};
-    if (p0.agent && AGENT_IDS.includes(p0.agent)) selectAgent(p0.agent);
-
     cleanup = () => {
       dead = true; cancelAnimationFrame(S.rafId); S.replay?.dispose();
       timers.forEach(clearTimeout); clearTimeout(searchTimer);
@@ -464,6 +458,16 @@ export default {
       ui.closePopover?.();
       document.querySelector("link[data-agents-css]")?.remove();
     };
+    renderAll();
+    try { const snap = await ctx.events.snapshot(); if (snap?.concurrency?.budget_max) S.budgetMax = snap.concurrency.budget_max; } catch { /* optional */ }
+    await loadRuns();
+    if (dead) return;
+    await loadRun(pickInitialRun());
+    if (dead) return;
+    // deep link: #/agents?agent=backtester
+    const p0 = ctx.route?.params || {};
+    if (p0.agent && AGENT_IDS.includes(p0.agent)) selectAgent(p0.agent);
+
     // test hook (read-only view of state; no write access to the real store)
     window.__agents = { state: () => ({ mode: mode(), runId: S.runId, count: baseEvents().length, shown: shownEvents().length, seqs: [...S.seqs], selected: S.selected, replay: S.replayState, demo: S.demo, conn: S.conn.conn }),
       graph, view: () => V };

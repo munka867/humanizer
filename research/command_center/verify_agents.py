@@ -204,6 +204,16 @@ def main():
             check("Messages tab shows the delegation from lead", "Implement DAILY_SPEC v1" in page.locator(".ag-ins-body").inner_text() and "Received" in page.locator(".ag-ins-body").inner_text())
             page.click('.ag-ins-body [role=tab]:has-text("Current task")'); page.wait_for_timeout(200)
             check("Current task tab: no usage invented", "Not reported by any event" in page.locator(".ag-ins-body").inner_text())
+            emit("--type", "tool.activity", "--agent", "backtester", "--tool", "run_tests", "--summary", "Ran 17 daily tests")
+            page.click('.ag-ins-body [role=tab]:has-text("Tool activity")'); page.wait_for_function("document.querySelector('.ag-ins-body').textContent.includes('Ran 17 daily tests')", timeout=6000)
+            check("Tool activity tab lists tool.activity events (tool + summary)", "run_tests" in page.locator(".ag-ins-body").inner_text())
+            page.click('.ag-ins-body [role=tab]:has-text("Run history")'); page.wait_for_timeout(200)
+            rh = page.locator(".ag-ins-body").inner_text()
+            check("Run history tab lists this agent's events (status transitions, results)", "agent.status" in rh and "test.result" in rh and "complete" in rh)
+            page.click('.ag-ins-body [role=tab]:has-text("Current task")'); page.wait_for_timeout(100)
+            page.click('.ag-inspector button:has-text("Review result")'); page.wait_for_timeout(500)
+            check("Review result opens the latest result (test) in a panel", page.locator(".drawer").count() == 1 and "pytest" in page.locator(".drawer").inner_text())
+            page.keyboard.press("Escape"); page.wait_for_timeout(400)
             page.click('.ag-inspector button:has-text("View changes")'); page.wait_for_timeout(300)
             check("View changes shows the git-tracked path as text (no git call)", "docs/DAILY_RESULTS.md" in page.locator(".popover").inner_text() and "no git command" in page.locator(".popover").inner_text())
             page.keyboard.press("Escape"); page.wait_for_timeout(200)
@@ -267,6 +277,13 @@ def main():
             page.wait_for_timeout(300)
             check("towers do not move when events arrive", page.evaluate("JSON.stringify([...document.querySelectorAll('.ag-tower')].map(t => [t.style.left, t.style.top]))") == tower_pos)
             shot("connectors")
+            page.click('.ag-tabs-card [role=tab]:has-text("Task board")'); page.wait_for_timeout(300)
+            check("task board has columns by status; T-daily sits in Queued (its only task event)", page.locator(".ag-col").count() == 6 and "T-daily" in page.locator(".ag-col-queued").inner_text() and "T-audit" in page.locator(".ag-col-queued").inner_text())
+            shot("task-board")
+            page.click('.ag-tabs-card [role=tab]:has-text("Dependencies")'); page.wait_for_timeout(300)
+            dt = page.locator(".ag-deps").inner_text()
+            check("dependency list shows T-audit waits on T-daily with owners and the connector state", "T-audit" in dt and "T-daily" in dt and "Dashed connector drawn" in dt and "Backtester" in dt and "Validator" in dt, dt.replace("\n", " | ")[:200])
+            page.click('.ag-tabs-card [role=tab]:has-text("Event timeline")'); page.wait_for_timeout(200)
 
             # ------------------------------------------------------------ heartbeat alone must not mark an agent working
             emit("--type", "heartbeat", "--agent", "risk_execution")
@@ -469,6 +486,12 @@ def main():
             check("800px context: no page errors", not errs2, errs2[:3])
             ctx2.close()
 
+            # dev harness (stub ctx, live GETs): the workspace must also mount there
+            p3 = br.new_context(viewport={"width": 1440, "height": 900}).new_page()
+            errs3 = []
+            p3.on("pageerror", lambda e: errs3.append(str(e))); p3.on("console", lambda m: errs3.append(m.text) if m.type == "error" else None)
+            p3.goto(BASE + "/static/dev.html?ws=agents&live=1"); p3.wait_for_selector(".ag-tower", state="attached", timeout=10000); p3.wait_for_timeout(1500)
+            check("dev harness (?ws=agents&live=1) mounts the workspace with 7 towers and no errors", p3.locator(".ag-tower").count() == 7 and not errs3, errs3[:3])
             check("no external requests were made", not ext, ext[:3])
             real_errs = [e for e in errors if "ERR_CONNECTION_REFUSED" not in e]   # refused connections are the expected effect of the deliberate server kill
             check("no page errors or console errors (apart from the refused connections caused by the deliberate server kill)", not real_errs, real_errs[:5])

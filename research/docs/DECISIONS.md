@@ -10,3 +10,9 @@
   bypassed. Account data will be ingested only from files the user provides (Flex) or after explicit approval.
 - D8 2026-10-08 Stack for command centre: stdlib+minimal deps, SQLite event store, static offline frontend (single user).
 - D9 2026-10-08 LIVE and PAPER remain disabled; no order-capable tool is called by any code in this repo.
+- D10 2026-10-08 INCIDENT NOTE (ledger hygiene): results/test_access_log.jsonl was accidentally created by dashboard test runs
+  (6 REFUSED rows for D3_V1_c2_both, 0 granted; 2026-10-08 05:53-06:01Z), got swept into WIP commit 8bcce96, then emptied/deleted by a
+  worker. Verified from git history: no granted access ever occurred; the sealed final test is still unspent. The record is
+  recoverable via `git show 8bcce96:research/results/test_access_log.jsonl`. Fix: tests/verify scripts must redirect the ledger
+  (CC_TEST_ACCESS_LOG), and workers must not delete audit files; a real ledger, if created, must never be removed.
+- D11 2026-10-08 Core fix: ctx.fmt.num accepted only a number; it now also accepts {dp} (table column formatters passed an options object).

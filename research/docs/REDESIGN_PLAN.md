@@ -44,3 +44,4 @@ Change% is vs prior regular-session close. Daily bars only: no intraday interval
 2. Command Center "Recent events": test.result rows show 'backtester:' with the test name missing; show name + outcome.
 3. Command Center right column is clipped at the bottom at 1440x900 (data freshness list cut off); make that panel scroll internally or compact it.
 4. Watchlist table in Stocks sits below the fold at 1440x900 (acceptable but consider a compact side placement).
+5. Research & Strategies table: Status column text is clipped ('Not runnable. NOT RUN: no data. T'); wrap or ellipsis with tooltip.

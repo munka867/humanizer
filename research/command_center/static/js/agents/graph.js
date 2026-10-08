@@ -12,7 +12,7 @@ export function createGraph(ctx, { onSelect, onEdgeInfo, onNeedHeight } = {}) {
   const { el, ui, fmt } = ctx;
   const svg = (tag, attrs, ...kids) => el("svg:" + tag, attrs, ...kids);
   const uidp = "ag" + Math.random().toString(36).slice(2, 7);
-  let L = makeLayout("full"), book = createLaneBook(L), density = "full";
+  let L = makeLayout("full"), book = createLaneBook(L), density = "full", compactW = 0;
   let T = { s: 1, x: 0, y: 0 }, userMoved = false, vw = 0, vh = 0;
   let view = null, uis = { selected: null, filters: {}, refMs: Date.now(), mode: "live", hl: null };
   const towers = {}, edges = new Map(), pulses = new Map(), tips = new Map();
@@ -54,7 +54,8 @@ export function createGraph(ctx, { onSelect, onEdgeInfo, onNeedHeight } = {}) {
       id, root: null,
       title: el("div", { class: "t-title" }, ROLE[id].name),
       demo: el("span", { class: "t-demo", hidden: true }, "DEMO"),
-      badge: el("div", { class: "t-badge" }),
+      badgeSlot: el("span", { class: "t-bslot" }),
+      badge: null,
       task: el("div", { class: "t-task" }),
       elapsed: el("div", { class: "t-line t-elapsed" }),
       last: el("div", { class: "t-line t-last" }),
@@ -63,6 +64,7 @@ export function createGraph(ctx, { onSelect, onEdgeInfo, onNeedHeight } = {}) {
       result: el("div", { class: "t-result" }),
       resultText: null,
     };
+    t.badge = el("div", { class: "t-badge" }, t.badgeSlot, t.demo);
     t.resultLabel = el("span", { class: "t-result-k" }, "Latest result:");
     t.resultText = el("span", { class: "t-result-v" });
     t.result.append(t.resultLabel, t.resultText);
@@ -70,7 +72,7 @@ export function createGraph(ctx, { onSelect, onEdgeInfo, onNeedHeight } = {}) {
       on: { click: () => onSelect?.(id, "tower"), keydown: (e) => towerKey(e, id) } },
       crownSvg(lead),
       el("div", { class: "t-body" },
-        el("div", { class: "t-head" }, t.title, t.demo), t.badge, t.task,
+        el("div", { class: "t-head" }, t.title), t.badge, t.task,
         el("div", { class: "t-meta" }, t.elapsed, t.last, t.counts, t.hb), t.result));
     stage.append(t.root);
     towers[id] = t;
@@ -102,7 +104,7 @@ export function createGraph(ctx, { onSelect, onEdgeInfo, onNeedHeight } = {}) {
     t.root.classList.toggle("is-hl", !!uis.hl?.agents?.has(ag.id));
     t.demo.hidden = !(ag.demo && !ag.real);
     // status badge (replace only on change)
-    if (t.badge.dataset.k !== key) { t.badge.dataset.k = key; t.badge.replaceChildren(statusBadge(ctx, key)); }
+    if (t.badge.dataset.k !== key) { t.badge.dataset.k = key; t.badgeSlot.replaceChildren(statusBadge(ctx, key)); }
     // current task
     let task;
     if (!ag.has_events) task = "No agent running";
@@ -115,7 +117,10 @@ export function createGraph(ctx, { onSelect, onEdgeInfo, onNeedHeight } = {}) {
     if (!ag.has_events) {
       setText(t.elapsed, "No events from this agent"); t.elapsed.dataset.since = ""; setText(t.last, ""); t.counts.replaceChildren();
     } else {
-      if (ag.status && ag.status_since) { t.elapsed.dataset.since = ag.status_since; setText(t.elapsed, `${live ? "In status" : "In status at end"} ${elapsedText(ag.status_since, refMs)}`); }
+      if (ag.status && ag.status_since) {
+        t.elapsed.dataset.since = ag.status_since; setText(t.elapsed, `In status ${elapsedText(ag.status_since, refMs)}`);
+        t.elapsed.title = live ? "Time since the last status change (counts up while the stream is live)" : `Measured to ${timeLabel(ctx, new Date(refMs).toISOString(), refMs)} (${uis.mode === "replay" ? "replay time" : uis.mode === "stale" ? "last data received" : "last event of this run"}), not to now`;
+      }
       else { t.elapsed.dataset.since = ""; setText(t.elapsed, "No status event yet"); }
       setText(t.last, `Last ${timeLabel(ctx, ag.last_activity, refMs)}`); t.last.title = `Last event ${timeLabel(ctx, ag.last_activity, refMs)}`;
       setText(t.counts, `Queued ${ag.queued} · Done ${ag.completed}`);
@@ -237,8 +242,8 @@ export function createGraph(ctx, { onSelect, onEdgeInfo, onNeedHeight } = {}) {
   function wantedDensity() { const r = viewport.getBoundingClientRect(); return r.width >= FULL_MIN_WIDTH ? "full" : "compact"; }
   function relayout() {
     measure(); if (!vw) return;
-    const d = wantedDensity();
-    if (d !== density) { density = d; L = makeLayout(d); applyLayout(); if (view) { updateEdges(view); } userMoved = false; }
+    const d = wantedDensity(), cw = d === "compact" ? Math.max(126, Math.min(140, Math.floor((vw - 24 - 40 - 50) / 6))) : 0;
+    if (d !== density || cw !== compactW) { density = d; compactW = cw; L = makeLayout(d, d === "compact" ? vw : 0); applyLayout(); if (view) { updateEdges(view); } userMoved = false; }
     // height needed so the fit scale is limited by WIDTH (keeps text >= ~13px effective) instead of by a short pane
     onNeedHeight?.(Math.ceil(L.size.h * Math.min(1, Math.max(0.8, (vw - 24) / L.size.w))) + 24 + legend.offsetHeight);
     if (!userMoved) fit(false);

@@ -79,15 +79,15 @@ export function createEnv({ api, events, freshness, prefs, audit, risk }) {
     get hasDemo() { return !!S.snap?.has_demo; },
     get connections() { return S.conn; },
     get approvalsPending() { return (S.snap?.approvals || []).filter(a => !a.resolution); },
-    /** setMode(id) -> {ok, reason?}. PAPER/LIVE/SHADOW are refused (and the refusal is audited). Selectable modes are display labels only. */
+    /** setMode(id) -> {ok, reason?, audit:{ok,error?}}. PAPER/LIVE/SHADOW are refused (and the refusal is audited). Selectable modes are display labels only. */
     async setMode(id) {
       const m = MODES.find(x => x.id === id);
       const old = currentMode();
       if (!m) return { ok: false, reason: "Unknown mode" };
-      if (!m.selectable) { audit("ui.mode_refused", { target: "mode", old, new: id, outcome: "refused", reason: m.refusal }); return { ok: false, reason: m.refusal }; }
+      if (!m.selectable) { const a = await audit("ui.mode_refused", { target: "mode", old, new: id, outcome: "refused", reason: m.refusal }); return { ok: false, reason: m.refusal, audit: a }; }
       prefs.set("ui.mode", id); emit();
-      if (old !== id) audit("ui.mode", { target: "mode", old, new: id, outcome: "applied", reason: "display label only; no execution exists" });
-      return { ok: true };
+      const a = old !== id ? await audit("ui.mode", { target: "mode", old, new: id, outcome: "applied", reason: "display label only; no execution exists" }) : { ok: true, skipped: true };
+      return { ok: true, audit: a };
     },
     capability: (id) => caps()[id] || { state: "unknown", tone: "neutral", detail: "" },
     capabilities: caps,

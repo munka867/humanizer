@@ -66,7 +66,7 @@ const EXTRAS = {
     const slot = el("div", {}, ctx.ui.skeleton({ lines: 4 })); host.append(card("Connections (live from /api/connections)", slot));
     try {
       const c = await ctx.api.get("/api/connections");
-      const flat = [["Broker", `${c.broker.state}: ${c.broker.reason}`], ["Execution", c.broker.execution], ["Market data source", c.market_data.source], ["Market data state", c.market_data.state],
+      const flat = [["Broker", c.broker.reason], ["Execution", c.broker.execution], ["Market data source", c.market_data.source], ["Market data state", c.market_data.state],
         ["Interval", c.market_data.interval], ["Instruments", c.market_data.instruments], ["Last bar", c.market_data.last_bar], ["Retrieved on", c.market_data.last_retrieved_on],
         ["Source delay (s)", Array.isArray(c.market_data.delayed_seconds) ? c.market_data.delayed_seconds.join(", ") : c.market_data.delayed_seconds], ["Event stream max seq", c.event_stream.max_seq], ["Events DB", c.storage.events_db]];
       slot.replaceChildren(ctx.ui.table({ id: "ph.conn", ariaLabel: "Connections", rows: flat.map(([k, v]) => ({ k, v })), rowKey: (r) => r.k, exportable: false, columnMenu: false,

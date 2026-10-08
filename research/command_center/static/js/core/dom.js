@@ -10,7 +10,7 @@ function setAttr(node, k, v) {
   node.setAttribute(k, v === true ? "" : String(v));
 }
 
-/** el(tag, attrs?, ...children). attrs: class, text, dataset:{}, style:{}, on:{evt:fn}, aria-*/role/etc as plain attributes.
+/** el(tag, attrs?, ...children). attrs: class, text, dataset:{}, style:{}, on:{evt:fn}, aria-xxx and role as plain attributes.
  *  children: strings/numbers become TEXT nodes (never parsed as HTML); Nodes appended; arrays flattened; null/false skipped. */
 export function el(tag, attrs, ...children) {
   const svg = tag.startsWith("svg:");

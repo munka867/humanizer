@@ -1,0 +1,3 @@
+core kit ready: 2026-10-08T05:31:34Z UTC
+ctx contract: static/js/core/README.md
+verified by: command_center/verify_shell.py (115 checks) + tests/test_cc_shell.py

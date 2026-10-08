@@ -14,6 +14,7 @@ export function createShell(ctx) {
   const app = $("app"), topbar = $("topbar"), nav = $("nav"), outlet = $("workspace"), banners = $("banners");
   const tone = (t) => ({ ok: "ok", warn: "warn", bad: "bad", info: "info", neutral: "neutral", demo: "demo" }[t] || "neutral");
 
+  let fitQueued = false;
   // ---------------------------------------------------------------- chips
   /** chip({id, pri, icon, label, sub, tone, onClick, aria}) -> {el, set({icon,label,sub,tone,aria,title})} */
   function chip(o) {
@@ -41,14 +42,14 @@ export function createShell(ctx) {
 
   // search
   const searchId = uid("search");
-  const searchIn = el("input", { type: "search", class: "search-input", id: searchId, placeholder: "Search symbols", role: "combobox", "aria-expanded": "false", "aria-controls": `${searchId}-list`, "aria-autocomplete": "list", "aria-label": "Search symbols (press / to focus)", autocomplete: "off", spellcheck: "false" });
+  const searchIn = el("input", { type: "search", class: "search-input", id: searchId, placeholder: "Symbol", role: "combobox", "aria-expanded": "false", "aria-controls": `${searchId}-list`, "aria-autocomplete": "list", "aria-label": "Search symbols (press / to focus)", autocomplete: "off", spellcheck: "false" });
   const searchList = el("ul", { class: "search-list", role: "listbox", id: `${searchId}-list`, "aria-label": "Symbol results", hidden: true });
   const searchBox = el("div", { class: "search", role: "search" }, el("span", { class: "search-ic" }, icon("search", 16)), searchIn, el("kbd", { class: "kbd search-kbd", "aria-hidden": "true" }, "/"), searchList);
   searchBox.dataset.pri = 4;
 
   // environment badge: the TRUE execution environment (there is none)
   const envBadge = el("div", { class: "env-badge", role: "status", id: "env-badge", "aria-label": "Environment: research only. Execution: none, broker adapter not built.", title: "Execution: none — broker adapter not built", dataset: { pri: 10 } },
-    icon("shield", 16), el("span", { class: "env-label" }, "ENVIRONMENT"), el("strong", { class: "env-value" }, "RESEARCH ONLY"), el("span", { class: "env-sub" }, "no execution"));
+    icon("shield", 16), el("span", { class: "env-label" }, "ENV", el("span", { class: "env-long" }, "IRONMENT")), el("strong", { class: "env-value" }, "RESEARCH ONLY"), el("span", { class: "env-sub" }, "no execution"));
 
   // mode selector (separate from navigation)
   const modeBtn = el("button", { type: "button", class: "chip mode-btn", id: "mode-btn", "aria-haspopup": "dialog", "aria-expanded": "false", dataset: { pri: 9, tone: "info" } },
@@ -77,7 +78,6 @@ export function createShell(ctx) {
   searchBox.classList.add("tb-search");
 
   // ---------------------------------------------------------------- top bar overflow ("fit")
-  let fitQueued = false;
   function scheduleFit() { if (fitQueued) return; fitQueued = true; requestAnimationFrame(() => { fitQueued = false; fit(); }); }
   function fit() {
     for (const n of items) if (n.parentNode !== right) right.insertBefore(n, ovfBtn);
@@ -110,7 +110,8 @@ export function createShell(ctx) {
     navList.append(el("li", {}, a));
   }
   const collapseBtn = el("button", { type: "button", class: "nav-collapse", id: "nav-collapse", "aria-expanded": "true", "aria-controls": "nav" }, icon("panel_left", 18), el("span", { class: "nav-collapse-label" }, "Collapse"));
-  nav.append(navList, el("div", { class: "nav-foot" }, collapseBtn, el("p", { class: "nav-hint" }, el("kbd", { class: "kbd" }, "Alt"), "+", el("kbd", { class: "kbd" }, "1"), "–", el("kbd", { class: "kbd" }, "8"), " switch · ", el("kbd", { class: "kbd" }, "/"), " search")));
+  const K = (t) => el("kbd", { class: "kbd" }, t);
+  nav.append(navList, el("div", { class: "nav-foot" }, collapseBtn, el("p", { class: "nav-hint" }, el("span", {}, K("Alt"), "+", K("1"), "\u2013", K("8"), " switch"), el("span", {}, K("/"), " search \u00b7 ", K("["), " collapse"))));
   const scrim = $("nav-scrim");
 
   function navMode() { return innerWidth < NAV_BREAK_DRAWER ? "drawer" : innerWidth < NAV_BREAK_ICONS ? "icons" : (prefs.get("shell.nav_collapsed", false) ? "icons" : "full"); }
@@ -164,7 +165,7 @@ export function createShell(ctx) {
 
   function paintToken() {
     const has = api.token.has(), st = prefs.status();
-    tokenBtn.replaceChildren(icon(has ? "lock" : "unlock", 18), st.pending && !st.synced ? el("span", { class: "dot-warn", "aria-hidden": "true" }) : null);
+    tokenBtn.replaceChildren(...[icon(has ? "lock" : "unlock", 18), st.pending && !st.synced ? el("span", { class: "dot-warn", "aria-hidden": "true" }) : null].filter(Boolean));
     tokenBtn.setAttribute("aria-label", has ? `API token set${st.pending ? `; ${st.pending} preference change(s) not yet saved` : ""}` : "API token not set: changes cannot be saved to the server");
     tokenBtn.title = tokenBtn.getAttribute("aria-label");
   }
@@ -225,8 +226,8 @@ export function createShell(ctx) {
         el("span", { class: "mode-item-name" }, m.id, cur ? el("span", { class: "sr-only" }, " (current)") : null), el("span", { class: "mode-item-desc" }, m.selectable ? m.desc : (m.id === "SHADOW" ? "Unavailable" : "Refused")), cur ? icon("check", 14) : (m.selectable ? null : icon("lock", 14)));
       b.addEventListener("click", async () => {
         const r = await env.setMode(m.id);
-        if (r.ok) { paintMode(); box.querySelectorAll(".mode-item").forEach(x => { const on = x === b; x.classList.toggle("current", on); x.setAttribute("aria-pressed", String(on)); }); msg.className = "mode-msg ok"; msg.replaceChildren(icon("check", 14), ` Display label set to ${m.id}. Execution unchanged: none.`); }
-        else { msg.className = "mode-msg bad"; msg.replaceChildren(icon("x_circle", 14), " " + r.reason); }
+        if (r.ok) { paintMode(); box.querySelectorAll(".mode-item").forEach(x => { const on = x === b; x.classList.toggle("current", on); x.setAttribute("aria-pressed", String(on)); }); msg.className = "mode-msg ok"; msg.replaceChildren(icon("check", 14), el("span", {}, ` Display label set to ${m.id}. Execution unchanged: none.`, r.audit && !r.audit.ok ? el("span", { class: "mode-audit-warn" }, ` Audit entry NOT recorded: ${r.audit.error}`) : null)); }
+        else { msg.className = "mode-msg bad"; msg.replaceChildren(icon("x_circle", 14), el("span", {}, " " + r.reason, r.audit && !r.audit.ok ? el("span", { class: "mode-audit-warn" }, ` (refusal not audited: ${r.audit.error})`) : null)); }
       });
       list.append(b);
     }
@@ -249,6 +250,7 @@ export function createShell(ctx) {
     const e = events.state();
     const lab = { live: "Agents live", reconnecting: "Agents reconnecting", stale: "Agents STALE", connecting: "Agents connecting" }[e.conn];
     agentsChip.set({ label: lab, sub: e.conn === "stale" && e.lastBeat ? fmt.time(e.lastBeat, { date: false }) : "", icon: e.conn === "live" ? "radio" : e.conn === "stale" ? "alert" : "clock", tone: e.conn === "live" ? "ok" : e.conn === "connecting" ? "neutral" : "warn", aria: `Agent event stream ${e.conn}`, title: freshness.get("agents").detail });
+    agentsChip.el.dataset.pri = e.conn === "live" || e.conn === "connecting" ? 5 : 9.5;  // a degraded stream stays visible in the bar
     demoChip.el.hidden = !env.hasDemo; scheduleFit();
     paintRisk();
   }
@@ -338,7 +340,7 @@ export function createShell(ctx) {
             flag("Concentration", f.concentration?.level ?? null, f.concentration?.reason || "No positions data"),
             flag("Reconciliation", f.reconciliation?.level ?? null, f.reconciliation?.reason || "No broker to reconcile against")])),
           sect("Controls",
-            el("p", { class: "ctl-lead" }, "Disabled, not simulated. Pressing nothing here records or changes anything."),
+            el("p", { class: "ctl-lead" }, "Disabled, not simulated. They record nothing and change nothing."),
             ctl("Pause new entries", "pause", "Stops the strategy runtime from submitting NEW entry orders for all strategies. Existing positions and protective orders are untouched.", "no strategy runtime and no broker adapter exist, so there is nothing to pause."),
             ctl("Cancel entry orders", "x_circle", "Cancels resting ENTRY orders at the broker. Protective stop and target orders are not cancelled.", "no broker adapter exists and there is no order state to cancel."),
             ctl("Flatten strategy positions", "stop", "Closes the open positions of ONE selected strategy at market. Will require a typed confirmation naming the strategy and the position list.", "no broker adapter exists and there are no positions.")),
@@ -396,6 +398,7 @@ export function createShell(ctx) {
     else if (e.key === "[" && navMode() !== "drawer") { prefs.set("shell.nav_collapsed", !prefs.get("shell.nav_collapsed", false)); applyNav(); }
   });
 
+  document.querySelector(".skip")?.addEventListener("click", (e) => { e.preventDefault(); outlet.focus(); }); // keep the hash route intact
   // ---------------------------------------------------------------- route hooks
   function onRoute(id) {
     const w = byId(id);

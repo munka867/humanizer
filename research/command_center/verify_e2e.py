@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """End-to-end browser check with Playwright + the preinstalled Chromium. Uses a TEMP db and port; kills its own server.
 
-  python command_center/verify_e2e.py
+  python command_center/verify_e2e.py            # NEW shell UI (served at /): events flow end to end, reload, kill/restart
+  python command_center/verify_e2e.py --legacy   # the preserved old UI at /static/legacy/index.html (tower graph etc.)
+Shell-specific checks (layout, risk panel, modes, kit) live in verify_shell.py.
 """
 from __future__ import annotations
 
@@ -48,7 +50,7 @@ def emit(*args):
                           capture_output=True, text=True)
 
 
-def main():
+def legacy_main():
     from playwright.sync_api import sync_playwright
     SHOTS.mkdir(exist_ok=True)
     exe = next(iter(sorted(glob.glob("/opt/pw-browsers/chromium-*/chrome-linux/chrome"))), None) or "/opt/pw-browsers/chromium/chrome"
@@ -65,7 +67,7 @@ def main():
             page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
             ext = []
             page.on("request", lambda r: ext.append(r.url) if not r.url.startswith(BASE) and not r.url.startswith("data:") else None)
-            page.goto(BASE)
+            page.goto(BASE + "/static/legacy/index.html")
             page.wait_for_selector("#conn.live", timeout=10000)
             check("connection badge LIVE", True)
             check("7 towers render", page.locator("g.tower").count() == 7, str(page.locator("g.tower").count()))
@@ -152,5 +154,57 @@ def main():
     return 1 if bad else 0
 
 
+def main():
+    """E2E for the new shell: seeded + emitted events reach the UI, survive reload, and the stream recovers after a server restart."""
+    from playwright.sync_api import sync_playwright
+    out = SHOTS / "after"
+    out.mkdir(parents=True, exist_ok=True)
+    exe = next(iter(sorted(glob.glob("/opt/pw-browsers/chromium-*/chrome-linux/chrome"))), None) or "/opt/pw-browsers/chromium/chrome"
+    db = os.path.join(tempfile.mkdtemp(), "e2e.sqlite3")
+    srv = start_server(db)
+    try:
+        subprocess.run([sys.executable, str(HERE / "seed_demo.py"), "--server", BASE, "--token", TOKEN], check=True, capture_output=True)
+        with sync_playwright() as pw:
+            br = pw.chromium.launch(executable_path=exe, args=["--no-sandbox"])
+            page = br.new_context(viewport={"width": 1440, "height": 900}).new_page()
+            errors, ext = [], []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
+            page.on("request", lambda r: ext.append(r.url) if not r.url.startswith(BASE) and not r.url.startswith("data:") else None)
+            page.goto(BASE + "/?cc_stale_after=4#/agents")
+            page.wait_for_function("window.__cc && __cc.ctx.events.state().conn === 'live'", timeout=10000)
+            page.wait_for_selector(".tbl-row", timeout=8000)
+            check("stream LIVE and agents screen lists seeded events", page.locator(".tbl-row").count() >= 10, str(page.locator(".tbl-row").count()))
+            check("mode label is DEMO for seeded-only events", page.locator("#mode-value").inner_text() == "DEMO")
+            r = emit("--type", "message.sent", "--agent", "lead", "--recipient", "backtester", "--source", "emit", "--preview", "e2e live delegation check", "--kind", "delegation")
+            check("emit.py accepted", r.returncode == 0, r.stdout.strip()[:120])
+            try:
+                page.wait_for_function("document.querySelector('#workspace').textContent.includes('e2e live delegation check')", timeout=5000)
+                check("emitted event appears live in the UI", True)
+            except Exception as e:
+                check("emitted event appears live in the UI", False, str(e)[:80])
+            page.screenshot(path=str(out / "e2e-agents-live.png"))
+            seq_before = page.evaluate("__cc.ctx.events.state().lastSeq")
+            page.reload()
+            page.wait_for_function("window.__cc && __cc.ctx.events.state().conn === 'live' && __cc.ctx.events.state().lastSeq >= %d" % seq_before, timeout=10000)
+            check("reload restores the same seq and the live event", page.evaluate("__cc.ctx.events.state().lastSeq") == seq_before and page.evaluate("__cc.ctx.events.recent(600).some(e => e.payload.preview === 'e2e live delegation check')"))
+            srv.send_signal(signal.SIGTERM); srv.wait(5)
+            page.wait_for_function("__cc.ctx.events.state().conn === 'stale'", timeout=20000)
+            check("server killed -> STALE banner with last-known time", "Event stream STALE" in page.locator(".banner-stale").inner_text(), page.locator(".banner-stale").inner_text())
+            page.screenshot(path=str(out / "e2e-stale.png"))
+            srv = start_server(db)
+            page.wait_for_function("__cc.ctx.events.state().conn === 'live'", timeout=20000)
+            check("server restart -> back to LIVE without reload", not page.locator(".banner-stale").is_visible())
+            check("no uncaught page errors", not [e for e in errors if not any(k in e for k in ("ERR_CONNECTION", "EventSource", "Failed to load resource", "net::"))], "; ".join(errors)[:200])
+            check("no external network requests", not ext, str(ext[:3]))
+            br.close()
+    finally:
+        srv.terminate()
+    bad = [r for r in results if not r[1]]
+    print(f"\n{len(results) - len(bad)}/{len(results)} checks passed")
+    (SHOTS / "e2e_shell_results.json").write_text(json.dumps([{"check": n, "pass": ok, "detail": d} for n, ok, d in results], indent=1))
+    return 1 if bad else 0
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(legacy_main() if "--legacy" in sys.argv else main())

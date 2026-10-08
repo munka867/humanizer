@@ -10,12 +10,24 @@ bash command_center/run.sh            # http://127.0.0.1:8765  (CC_PORT, CC_DB, 
 python command_center/seed_demo.py    # labelled DEMO events (source='demo'); idempotent
 python command_center/emit.py --type message.sent --agent lead --recipient backtester --preview 'please run baseline'
 python -m pytest tests/test_cc_*.py -q
-python command_center/verify_e2e.py   # Playwright end-to-end check, temp DB + own port, writes screenshots/
+python command_center/verify_e2e.py   # Playwright end-to-end check of the new shell UI (events flow, reload, kill/restart); --legacy checks the old UI
+python command_center/verify_shell.py # Playwright shell verification (4 viewports, nav, modes, risk panel, SSE replay, UI kit); writes screenshots/after/shell-*.png
 ```
 The server prints the `X-CC-Token` at start (random unless `CC_TOKEN` is set; a random one is also written to
 `command_center/.cc_token`, git-ignored, which `emit.py`/`seed_demo.py` read). Paste it into the header "Token" box
 to use the Controls. GET endpoints need no token (loopback only; non-local Host/Origin headers are refused).
 Stack: Python stdlib only (see `requirements.txt`); frontend is static files, no build, no CDN, works offline.
+
+## New UI shell (redesign) and dev harness
+`static/index.html` is the new workstation shell: fixed top bar (environment badge, display-mode selector, risk chip, broker / data /
+agent-stream / NYSE-session chips, notifications, token, theme), collapsible left navigation for 8 workspaces, hash router
+(`#/command_center` ... `#/settings`), lazy `static/js/workspaces/<id>.js` modules (honest placeholders today). The old UI lives untouched in
+`static/legacy/` (`/static/legacy/index.html`). The platform contract (ctx, ui kit, fmt, prefs, events, freshness) is documented in
+`static/js/core/README.md`; `static/js/core/READY` is written when the kit is usable.
+**Dev harness** for working on ONE workspace in isolation with a stub ctx (no backend writes, in-memory prefs):
+`http://127.0.0.1:8765/static/dev.html?ws=stocks` (`&live=1` lets GETs reach the real backend). Console: `__dev.emit(...)`, `__dev.setFresh(...)`, `__dev.fixtures`.
+Shell endpoints (`api_core.py`): `GET/POST /api/prefs`, `GET /api/instruments?q=`, `GET /api/connections`, `GET/POST /api/audit` (POSTs need the token;
+audit records an `audit.config` event). Shell tests: `python -m pytest tests/test_cc_shell.py -q`.
 
 ## Architecture
 - `schemas.py` – roles, statuses, modes, **versioned payload schemas** (`SCHEMAS[type][version]`), validation.

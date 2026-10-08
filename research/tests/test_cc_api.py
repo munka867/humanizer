@@ -166,19 +166,19 @@ def test_demo_labelling_snapshot_and_ui(srv):
     snap = call(srv, "GET", "/api/snapshot")[1]
     assert snap["has_demo"] is True and snap["mode"] == "DEMO" and "demo" in snap["sources"]
     assert any(a["demo"] for a in snap["agents"])
-    s, html = call(srv, "GET", "/")
+    s, html = call(srv, "GET", "/static/legacy/index.html")  # legacy UI kept under static/legacy/ (the new shell is served at /)
     assert s == 200 and b'id="banner-demo"' in html and b"source='demo'" in html
-    js = (STATIC / "app.js").read_text()
+    js = (STATIC / "legacy" / "app.js").read_text()
     assert "s.has_demo" in js and "tag-demo" in js
     assert call(srv, "GET", "/api/runs")[1]["runs"][0]["has_demo"] is True
 
 
 def test_ui_static_contract(srv):
-    js = (STATIC / "app.js").read_text()
+    js = (STATIC / "legacy" / "app.js").read_text()
     assert "STALE: showing last known state as of" in js
     assert "Private reasoning is not shown" in js
     assert "blocked: requires approval & broker adapter" in js
-    assert "prefers-reduced-motion" in (STATIC / "style.css").read_text()
+    assert "prefers-reduced-motion" in (STATIC / "legacy" / "style.css").read_text()
     assert call(srv, "GET", "/static/../server.py")[0] == 404
 
 

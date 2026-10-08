@@ -22,6 +22,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 STATIC = HERE / "static"
 MAX_BODY = 1_000_000
+IMPORT_MAX_BODY = 6_500_000  # /api/import/* only (preview enforces its own 5 MB content limit)
 MAX_BATCH = 500
 SSE_POLL_S = 0.25
 SSE_PING_S = 5.0
@@ -97,11 +98,11 @@ class Handler(BaseHTTPRequestHandler):
         tok = self.headers.get("X-CC-Token") or ""
         return bool(tok) and hmac.compare_digest(tok.encode(), self.server.token.encode())
 
-    def _body(self):
+    def _body(self, limit=None):
         if "application/json" not in (self.headers.get("Content-Type") or ""):
             raise ValidationError("Content-Type must be application/json")
         n = int(self.headers.get("Content-Length") or 0)
-        if n <= 0 or n > MAX_BODY:
+        if n <= 0 or n > (limit or MAX_BODY):
             raise ValidationError("body missing or too large")
         try:
             return json.loads(self.rfile.read(n))
@@ -165,7 +166,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self._token_ok():
             return self._err(401, "missing or invalid X-CC-Token")
         try:
-            body = self._body()
+            body = self._body(IMPORT_MAX_BODY if p.startswith("/api/import/") else None)
             fn, mt = router.find("POST", p)
             if fn:
                 return fn(self, mt, {}, body)

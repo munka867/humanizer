@@ -1,0 +1,577 @@
+[
+ {
+  "check": "1920x1080: shell fits (no page scroll, top bar does not overflow, no overlap/offscreen)",
+  "pass": true,
+  "detail": "{\"docOverflowX\": false, \"docOverflowY\": false, \"topbarOverflow\": 0, \"offscreen\": [], \"overlaps\": []}"
+ },
+ {
+  "check": "1920x1080: no clipped chip/nav text",
+  "pass": true,
+  "detail": "[]"
+ },
+ {
+  "check": "1920x1080: no nested scrollbars (only workspace/nav/table scroll)",
+  "pass": true,
+  "detail": "[] []"
+ },
+ {
+  "check": "1920x1080: ENV badge, mode, risk chip reachable",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "1440x900: shell fits (no page scroll, top bar does not overflow, no overlap/offscreen)",
+  "pass": true,
+  "detail": "{\"docOverflowX\": false, \"docOverflowY\": false, \"topbarOverflow\": 0, \"offscreen\": [], \"overlaps\": []}"
+ },
+ {
+  "check": "1440x900: no clipped chip/nav text",
+  "pass": true,
+  "detail": "[]"
+ },
+ {
+  "check": "1440x900: no nested scrollbars (only workspace/nav/table scroll)",
+  "pass": true,
+  "detail": "[] []"
+ },
+ {
+  "check": "1440x900: ENV badge, mode, risk chip reachable",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "1280x720: shell fits (no page scroll, top bar does not overflow, no overlap/offscreen)",
+  "pass": true,
+  "detail": "{\"docOverflowX\": false, \"docOverflowY\": false, \"topbarOverflow\": 0, \"offscreen\": [], \"overlaps\": []}"
+ },
+ {
+  "check": "1280x720: no clipped chip/nav text",
+  "pass": true,
+  "detail": "[]"
+ },
+ {
+  "check": "1280x720: no nested scrollbars (only workspace/nav/table scroll)",
+  "pass": true,
+  "detail": "[] []"
+ },
+ {
+  "check": "1280x720: ENV badge, mode, risk chip reachable",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "900x700: shell fits (no page scroll, top bar does not overflow, no overlap/offscreen)",
+  "pass": true,
+  "detail": "{\"docOverflowX\": false, \"docOverflowY\": false, \"topbarOverflow\": 0, \"offscreen\": [], \"overlaps\": []}"
+ },
+ {
+  "check": "900x700: no clipped chip/nav text",
+  "pass": true,
+  "detail": "[]"
+ },
+ {
+  "check": "900x700: no nested scrollbars (only workspace/nav/table scroll)",
+  "pass": true,
+  "detail": "[] []"
+ },
+ {
+  "check": "900x700: ENV badge, mode, risk chip reachable",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "900x700: nav collapses to icons",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "900x700: overflow menu holds the lowest-priority items",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "overflow menu opens with status items",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "overflow menu closes with Esc",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "700px: nav becomes a drawer (hidden until opened)",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "700px: shell fits, no overflow",
+  "pass": true,
+  "detail": "{\"docOverflowX\": false, \"topbarOverflow\": 0, \"offscreen\": []}"
+ },
+ {
+  "check": "700px: nav drawer opens, focus moves into it",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "700px: Esc closes nav drawer and focus returns to the toggle",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "ENVIRONMENT badge states research only / no execution",
+  "pass": true,
+  "detail": "ENV RESEARCH ONLY"
+ },
+ {
+  "check": "broker chip says 'Broker not connected'",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "market-data chip is Historical (daily bars), never Realtime",
+  "pass": true,
+  "detail": "Data Historical 10-07"
+ },
+ {
+  "check": "exchange-session chip is NYSE open/closed and marked unverified",
+  "pass": true,
+  "detail": "NYSE closedunverified"
+ },
+ {
+  "check": "risk chip reads 'No risk policy'",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "footer credit line + safe link",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "nav lists exactly the 8 workspaces in order",
+  "pass": true,
+  "detail": "['Command Center', 'Stocks & Charts', 'Portfolio & Orders', 'Agent Team', 'Research & Strategies', 'Backtesting & Monte Carlo', 'Data & Connections', 'Settings & Audit']"
+ },
+ {
+  "check": "nav shows honest capability states (no 'not implemented')",
+  "pass": true,
+  "detail": "['ready', 'ready', 'no broker', 'ready', 'ready', 'ready', 'ready', 'ready']"
+ },
+ {
+  "check": "no emoji in the chrome",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "landmarks: banner, navigation, main, contentinfo",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "token saved in localStorage",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "nav collapses to icons",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "collapsed nav persists across reload",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "nav state persisted on the SERVER (/api/prefs)",
+  "pass": true,
+  "detail": "{'shell.nav_collapsed': True}"
+ },
+ {
+  "check": "with the UI cache wiped the server prefs still restore the nav state",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "mode menu lists DEMO BACKTEST REPLAY SHADOW PAPER LIVE",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "mode menu states execution none / broker adapter not built",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "default mode badge matches the event data (seeded demo => DEMO)",
+  "pass": true,
+  "detail": "DEMO"
+ },
+ {
+  "check": "selecting BACKTEST updates the badge",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "mode change recorded as audit.config (old DEMO -> new BACKTEST)",
+  "pass": true,
+  "detail": "[{'seq': 35, 'event_id': '3b69f6ea7fc3455f9a8cb5df86b730f6', 'timestamp_utc': '2026-10-08T05:30:27.843Z', 'run_id': 'demo-run-1', 'source': 'ui', 'target': 'mode', 'outcome': 'applied', 'area': 'ui', 'action': 'mode', 'old': 'DEMO', 'reason': 'display label only; no execution exists', 'new': 'BACKTEST'}]"
+ },
+ {
+  "check": "PAPER is refused with a concise reason and mode stays BACKTEST",
+  "pass": true,
+  "detail": "Refused: PAPER needs an approved broker adapter and a deterministic risk engine. Neither exists yet."
+ },
+ {
+  "check": "LIVE is refused with a concise reason and mode stays BACKTEST",
+  "pass": true,
+  "detail": "Refused: LIVE trading is not permitted. No broker adapter exists."
+ },
+ {
+  "check": "SHADOW is refused with a concise reason and mode stays BACKTEST",
+  "pass": true,
+  "detail": "Unavailable: SHADOW needs a live market-data feed and a shadow-order recorder. Neither exists yet."
+ },
+ {
+  "check": "refusals are audited",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "server never recorded a PAPER/LIVE mode event",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "Esc closes the mode menu and focus returns to the button",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "broker popover: 'Trading setup incomplete' + Set up action",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "Set up opens Data & Connections",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "Data placeholder shows real connection state",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "risk drawer opens as a modal dialog",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "risk drawer: 'No risk policy configured' and em dashes with reasons",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "risk drawer: all 3 controls DISABLED with scope + prerequisite",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "risk drawer: disabled controls reference their explanation (aria-describedby)",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "risk drawer: flags listed (stale data, spread, buying power, concentration, reconciliation)",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "focus is trapped inside the drawer and background is inert",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "Tab stays inside the drawer",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "Esc closes the risk drawer",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "focus returns to the risk chip; background no longer inert",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "bell shows real unread incidents/approvals",
+  "pass": true,
+  "detail": "3"
+ },
+ {
+  "check": "notifications list the real incident text",
+  "pass": true,
+  "detail": "Notifications Incident \u00b7 warning Validator found a high-severity finding 2026-10-08 01:30:18 EDT \u00b7 run demo-run-1 Inci"
+ },
+ {
+  "check": "Alt+3 opens Portfolio & Orders",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "portfolio placeholder says broker not connected (not zeros)",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "'/' focuses symbol search",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "symbol search lists SPY with conId + exchange from the manifest",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "search result without manifest name says so (nothing invented)",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "choosing a result routes to Stocks with symbol/conid/exchange",
+  "pass": true,
+  "detail": "#/stocks?symbol=SPY&conid=756733&ex=ARCA"
+ },
+ {
+  "check": "search degrades honestly when /api/instruments is absent",
+  "pass": true,
+  "detail": "Instrument search unavailable: /api/instruments is not provided by this server."
+ },
+ {
+  "check": "first Tab stop is the skip link",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "skip link moves focus to the workspace without breaking the route",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "visible focus ring on keyboard focus (2px solid focus colour)",
+  "pass": true,
+  "detail": "['solid', '2px', 'rgb(156, 192, 255)']"
+ },
+ {
+  "check": "table sorts asc then desc (aria-sort)",
+  "pass": true,
+  "detail": "IWM"
+ },
+ {
+  "check": "table: ArrowDown moves row focus",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "table: column can be hidden and the state is persisted in prefs",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "CSV export contains the visible columns and rows only",
+  "pass": true,
+  "detail": "['Symbol,Name,Exchange,IBKR conId,Last bar,Bars,Retrieved', 'SPY,,ARCA,756733,2026-10-07,1000,2026-10-08']"
+ },
+ {
+  "check": "table: column resize (keyboard) widens the column",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "workspace load failure is contained (error view + Retry), shell alive",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "navigation works after a failed workspace",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "unknown route falls back to Command Center",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "agents placeholder lists real events from the stream",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "table row expansion works (click) and shows payload as text",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "theme toggle switches to light",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "theme persists across reload",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "prefers-reduced-motion respected (drawer transition ~0)",
+  "pass": true,
+  "detail": "1e-06s"
+ },
+ {
+  "check": "server killed -> agents chip leaves LIVE",
+  "pass": true,
+  "detail": "Agents reconnecting"
+ },
+ {
+  "check": "STALE banner: 'Event stream STALE - showing last known state as of <time>'",
+  "pass": true,
+  "detail": "Event stream STALE \u2014 showing last known state as of 01:30:40 EDT. No heartbeat for over 4 s; reconnecting automatically."
+ },
+ {
+  "check": "freshness model: agents feed is 'stale', quotes/broker feeds independent",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "workspace greyed while stale",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "reconnect: UI returns to LIVE without reload; stale banner gone",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "replay after restart: missed events delivered once, in order, no gaps",
+  "pass": true,
+  "detail": "seen=[39, 40, 41] expect=[39, 40, 41]"
+ },
+ {
+  "check": "replayed incident reached the bell",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "Last-Event-ID resume returns exactly the missed seqs",
+  "pass": true,
+  "detail": "[39, 40, 41]"
+ },
+ {
+  "check": "dev harness mounts a workspace with a stub ctx (no backend writes)",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "table >2000 rows is paged (500 rows in the DOM) with a pager",
+  "pass": true,
+  "detail": "Previous Page 1 of 10 \u00b7 rows 1\u2013500 of 5000 Next"
+ },
+ {
+  "check": "table: numeric cells right-aligned, tabular numerals, missing = em dash with reason tooltip",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "pager Next shows rows 501-1000",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "CSV of a paged table exports ALL rows (5000) and keeps the em-dash cells empty",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "table filter narrows rows and updates the count",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "table row expansion renders caller content as text",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "pct cells carry an explicit sign (colour is not the only cue)",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "confirm(): scope shown, typed-confirm gates the button, Esc resolves false",
+  "pass": true,
+  "detail": "{'disabledAtStart': True, 'scope': 'AffectsAll 3 open positions of strategy ORB-1 (SPY x 10, QQQ x 5)', 'focusOnInput': True, 'enabledAfterTyping': True, 'escResult': False, 'gone': True}"
+ },
+ {
+  "check": "toast renders in a polite live region",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "tabs: arrow keys move + activate, lazy render, aria-selected",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "resizer: keyboard resizes (left-edge handle, ArrowLeft grows), clamps and persists in prefs",
+  "pass": true,
+  "detail": "272"
+ },
+ {
+  "check": "resizer: Enter collapses the panel (inert) and persists",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "tooltip appears on keyboard focus with aria-describedby",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "fmt: money keeps currency, negative uses a true minus, missing is an em dash",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "fmt.time carries an explicit timezone label (EDT/EST and UTC)",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "NYSE clock: holidays/half-days computed (Thanksgiving 2026-11-26 closed, 2026-11-27 early close, Good Friday 2026-04-03 closed)",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "check": "kit harness: no page errors",
+  "pass": true,
+  "detail": "[]"
+ },
+ {
+  "check": "no external network requests (everything same-origin)",
+  "pass": true,
+  "detail": "[]"
+ },
+ {
+  "check": "no page errors / console errors",
+  "pass": true,
+  "detail": ""
+ }
+]

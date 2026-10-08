@@ -121,3 +121,12 @@ def test_agents_chip_does_not_imply_running_agents(app, page):
     page.goto(base + "/#/agents"); page.wait_for_timeout(2500)
     chip = page.evaluate("document.body.innerText")
     assert "Agents live" not in chip
+
+
+def test_el_href_allows_app_created_blob_urls_but_blocks_javascript(app, page):
+    """Regression: the P4-08 scheme filter must not break CSV export (blob: object URLs created by the app)."""
+    _, base = app
+    page.goto(base + "/")
+    res = page.evaluate("""async()=>{const m=await import('/static/js/core/dom.js');
+      return ['blob:http://127.0.0.1/abc','https://example.com/x','mailto:a@b.c','/static/x','javascript:1'].map(v=>m.el('a',{href:v}).getAttribute('href'))}""")
+    assert res == ["blob:http://127.0.0.1/abc", "https://example.com/x", "mailto:a@b.c", "/static/x", None]

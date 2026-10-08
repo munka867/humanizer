@@ -217,7 +217,7 @@
  {
   "check": "mode change recorded as audit.config (old DEMO -> new BACKTEST)",
   "pass": true,
-  "detail": "[{'seq': 35, 'event_id': 'd1ffa32cb7ff42179b52438ee413a8e6', 'timestamp_utc': '2026-10-08T06:39:35.928Z', 'run_id': 'demo-run-1', 'source': 'ui', 'reason': 'display label only; no execution exists', 'new': 'BACKTEST', 'area': 'ui', 'old': 'DEMO', 'action': 'mode', 'target': 'mode', 'outcome': 'applied'}]"
+  "detail": "[{'seq': 35, 'event_id': '982fd47c316e4fc0998165b1c74f888b', 'timestamp_utc': '2026-10-08T06:51:15.283Z', 'run_id': 'demo-run-1', 'source': 'ui', 'action': 'mode', 'outcome': 'applied', 'target': 'mode', 'reason': 'display label only; no execution exists', 'old': 'DEMO', 'area': 'ui', 'new': 'BACKTEST'}]"
  },
  {
   "check": "PAPER is refused with a concise reason and mode stays BACKTEST",
@@ -317,7 +317,7 @@
  {
   "check": "notifications list the real incident text",
   "pass": true,
-  "detail": "Notifications Incident \u00b7 warning Validator found a high-severity finding 2026-10-08 02:39:26 EDT \u00b7 run demo-run-1 Inci"
+  "detail": "Notifications Incident \u00b7 warning Validator found a high-severity finding 2026-10-08 02:51:05 EDT \u00b7 run demo-run-1 Inci"
  },
  {
   "check": "Alt+3 opens Portfolio & Orders",
@@ -432,12 +432,12 @@
  {
   "check": "server killed -> agents chip leaves LIVE",
   "pass": true,
-  "detail": "Agents reconnecting"
+  "detail": "Event stream reconnecting"
  },
  {
   "check": "STALE banner: 'Event stream STALE - showing last known state as of <time>'",
   "pass": true,
-  "detail": "Event stream STALE \u2014 showing last known state as of 02:39:49 EDT. No heartbeat for over 4 s; reconnecting automatically."
+  "detail": "Event stream STALE \u2014 showing last known state as of 02:51:28 EDT. No heartbeat for over 4 s; reconnecting automatically."
  },
  {
   "check": "freshness model: agents feed is 'stale', quotes/broker feeds independent",
@@ -457,7 +457,7 @@
  {
   "check": "replay after restart: missed events delivered once, in order, no gaps",
   "pass": true,
-  "detail": "seen=[39, 40, 41] expect=[39, 40, 41]"
+  "detail": "seen=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41] expect=[39, 40, 41]"
  },
  {
   "check": "replayed incident reached the bell",

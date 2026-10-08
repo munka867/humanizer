@@ -57,7 +57,7 @@ class Ctx:
             "manifest": ROOT / "data" / "raw" / "ibkr_connector" / "MANIFEST.json",
             "imports_dir": ROOT / "data" / "raw" / "ibkr_exports", "docs_dir": ROOT / "docs", "configs_dir": ROOT / "configs",
             "results_daily": ROOT / "results" / "daily", "experiments_dir": ROOT / "results" / "experiments",
-            "test_log": ROOT / "results" / "test_access_log.jsonl", "db": db_path.parent / "research.sqlite3",
+            "test_log": Path(os.environ.get("CC_TEST_ACCESS_LOG") or ROOT / "results" / "test_access_log.jsonl"), "db": db_path.parent / "research.sqlite3",
             "runner": None, "timeout_s": None,
         }
         p.update({k: (Path(v) if k not in ("runner", "timeout_s") and v is not None else v)

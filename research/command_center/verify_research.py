@@ -29,7 +29,7 @@ def check(name, ok, detail=""):
 
 
 def start_server(db):
-    env = dict(os.environ, CC_DB=db, CC_TOKEN=TOKEN, CC_PORT=str(PORT))
+    env = dict(os.environ, CC_DB=db, CC_TOKEN=TOKEN, CC_PORT=str(PORT), CC_TEST_ACCESS_LOG=os.path.join(os.path.dirname(db), "test_access_log.jsonl"))
     p = subprocess.Popen([sys.executable, "-m", "command_center.server"], cwd=ROOT, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     for _ in range(60):
         try:

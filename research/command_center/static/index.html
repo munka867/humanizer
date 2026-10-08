@@ -3,31 +3,30 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Research Command Centre</title>
-<script>try{var t=localStorage.getItem("cc.theme");if(t==="light"||t==="system")document.documentElement.dataset.theme=t}catch(e){}</script>
+<title>tradelab research workstation</title>
+<meta name="color-scheme" content="dark light">
+<script>try{var t=localStorage.getItem("cc.theme");if(t==="light")document.documentElement.dataset.theme="light"}catch(e){}</script>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/css/tokens.css">
+<link rel="stylesheet" href="/static/css/base.css">
+<link rel="stylesheet" href="/static/css/components.css">
+<link rel="stylesheet" href="/static/css/shell.css">
 </head>
 <body>
-<a class="skip" href="#view">Skip to content</a>
-<header id="top">
-  <div class="brand">Research Command Centre <span class="muted">· research / simulation only</span></div>
-  <div class="hdr-right">
-    <span id="mode-badge" class="badge mode" role="status" aria-label="Current mode">MODE: …</span>
-    <span id="conn" class="badge conn connecting" role="status">○ CONNECTING</span>
-    <label class="inline">Run <select id="run-select" aria-label="Run selector"></select></label>
-    <button id="theme" class="themebtn" type="button" aria-label="Theme: dark. Click to change">Theme: dark</button>
-    <label class="inline">Token <input id="token" type="password" autocomplete="off" placeholder="X-CC-Token" aria-label="X-CC-Token for commands"></label>
+<a class="skip" href="#workspace">Skip to workspace</a>
+<div id="app" class="app" data-nav="full">
+  <header id="topbar" class="topbar" role="banner" aria-label="Application bar"></header>
+  <div id="banners"></div>
+  <div class="body">
+    <nav id="nav" class="nav" aria-label="Workspaces"></nav>
+    <div id="nav-scrim" class="nav-scrim" hidden></div>
+    <main id="workspace" class="workspace" tabindex="-1" aria-labelledby="ws-title"><noscript>This application needs JavaScript.</noscript></main>
   </div>
-</header>
-<div id="banner-demo" class="banner demo" hidden role="note"><strong>DEMO DATA</strong> — events on screen include source='demo'. They are seeded examples, not real agent activity, trades, results or test passes.</div>
-<div id="banner-stale" class="banner stale" hidden role="alert"></div>
-<div id="modebar" class="modebar" aria-label="Mode selection"></div>
-<div class="layout">
-  <nav id="nav" aria-label="Screens"></nav>
-  <main id="view" tabindex="-1"></main>
+  <footer id="footer" class="footer" role="contentinfo">
+    <span class="footer-status">Research and simulation only. No broker adapter; nothing here can place an order.</span>
+    <span class="footer-credit">Charts: <a href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer">TradingView Lightweight Charts&trade;</a> (Apache-2.0)</span>
+  </footer>
 </div>
-<div id="live" class="sr-only" aria-live="polite"></div>
-<script src="/static/app.js"></script>
+<script type="module" src="/static/js/core/main.js"></script>
 </body>
 </html>

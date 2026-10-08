@@ -8,3 +8,8 @@ data/raw/ibkr_connector/*.json
 !data/raw/ibkr_connector/MANIFEST.json
 !data/raw/.gitkeep
 data/processed/
+
+# account exports and generated experiment outputs (research API)
+data/raw/ibkr_exports/
+results/experiments/
+command_center/data/research.sqlite3*

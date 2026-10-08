@@ -1,0 +1,4 @@
+"ClientAccountID","Symbol","ConID","AssetClass","CurrencyPrimary","TradeDate","DateTime","Buy/Sell","Quantity","TradePrice","IBCommission","Proceeds","TradeID","IBOrderID","Exchange"
+"SYNTH0001","SYNTHA","1000001","STK","USD","20240102","20240102;093501","BUY","10","100.50","-0.35","-1005.00","9000001","8000001","SYNTHX"
+"SYNTH0001","SYNTHA","1000001","STK","USD","20240103","20240103;154500","SELL","-10","101.25","-0.35","1012.50","9000002","8000002","SYNTHX"
+"SYNTH0001","SYNTHB","1000003","STK","USD","20240104","20240104;101500","BUY","5","20.00","-0.35","-100.00","9000003","8000003","SYNTHX"

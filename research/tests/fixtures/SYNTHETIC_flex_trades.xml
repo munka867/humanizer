@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SYNTHETIC test fixture. Invented values; field names are UNVERIFIED recollection of public IBKR Flex docs. NOT a real export. -->
+<FlexQueryResponse queryName="SYNTHETIC_Trades" type="AF">
+  <FlexStatements count="1">
+    <FlexStatement accountId="SYNTH0001" fromDate="2024-01-02" toDate="2024-01-05" period="Custom" whenGenerated="2024-01-06;000000">
+      <Trades>
+        <Trade accountId="SYNTH0001" symbol="SYNTHA" conid="1000001" assetCategory="STK" currency="USD" tradeDate="2024-01-02" dateTime="2024-01-02;093501" buySell="BUY" quantity="10" tradePrice="100.50" ibCommission="-0.35" proceeds="-1005.00" tradeID="9000001" ibOrderID="8000001" exchange="SYNTHX"/>
+        <Trade accountId="SYNTH0001" symbol="SYNTHA" conid="1000001" assetCategory="STK" currency="USD" tradeDate="2024-01-03" dateTime="2024-01-03;154500" buySell="SELL" quantity="-10" tradePrice="101.25" ibCommission="-0.35" proceeds="1012.50" tradeID="9000002" ibOrderID="8000002" exchange="SYNTHX"/>
+        <Trade accountId="SYNTH0001" symbol="" conid="1000002" assetCategory="STK" currency="USD" tradeDate="2024-01-04" dateTime="2024-01-04;101500" buySell="BUY" quantity="5" tradePrice="50.00" ibCommission="-0.35" proceeds="-250.00" tradeID="9000003" ibOrderID="8000003" exchange="SYNTHX"/>
+        <Trade accountId="SYNTH0001" symbol="SYNTHB" conid="1000003" assetCategory="STK" currency="USD" tradeDate="2024-01-05" dateTime="2024-01-05;111500" buySell="BUY" quantity="abc" tradePrice="20.00" ibCommission="-0.35" proceeds="-200.00" tradeID="9000004" ibOrderID="8000004" exchange="SYNTHX"/>
+      </Trades>
+    </FlexStatement>
+  </FlexStatements>
+</FlexQueryResponse>

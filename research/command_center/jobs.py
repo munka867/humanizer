@@ -181,11 +181,16 @@ class JobQueue:
                 "created_at": r["created_at"], "started_at": r["started_at"], "finished_at": r["finished_at"],
                 "exit_code": r["exit_code"], "progress": prog,
                 "stdout_tail": redact(r["stdout_tail"], self.cwd), "stderr_tail": redact(r["stderr_tail"], self.cwd),
-                "error": redact(r["error"] or "", self.cwd) or None, "out_dir": r["out_dir"]}
+                "error": redact(r["error"] or "", self.cwd) or None,
+                "out_dir": redact(r["out_dir"] or "", self.cwd) or None}
 
     def get(self, job_id: str) -> dict | None:
         r = self.rdb.one("SELECT * FROM jobs WHERE id=?", (job_id,))
         return self._public(r) if r else None
+
+    def out_dir_abs(self, job_id: str) -> Path | None:
+        r = self.rdb.one("SELECT out_dir FROM jobs WHERE id=?", (job_id,))
+        return Path(r["out_dir"]) if r and r["out_dir"] else None
 
     def list(self, limit: int = 100) -> list[dict]:
         rows = self.rdb.all("SELECT * FROM jobs ORDER BY created_at DESC, rowid DESC LIMIT ?", (max(1, min(limit, 500)),))

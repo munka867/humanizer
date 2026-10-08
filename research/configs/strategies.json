@@ -1,0 +1,322 @@
+{
+ "schema": "cc.strategies.v1",
+ "note": "Registry facts are copied from docs/DAILY_RESULTS.md and docs/EXPERIMENT_LOG.md. Runtime state changes are stored in research.sqlite3, never in this file. approved_paper/approved_live are not reachable through the API.",
+ "strategies": [
+  {
+   "id": "H1_sweep_reversal_v1",
+   "family": "H1",
+   "name": "H1 prior-extreme sweep reversal (MES 5-min)",
+   "state": "candidate",
+   "verdict": null,
+   "status_note": "NOT RUN: no data. The IBKR connector cannot supply a multi-month roll-aware intraday MES sample (docs/DATA_FINDINGS.md).",
+   "version": "STRATEGY_SPEC v1.1",
+   "rules": {
+    "doc": "docs/STRATEGY_SPEC.md",
+    "section": "2. Hypothesis H1; 3. H1 exact rules"
+   },
+   "source_research": [
+    {
+     "doc": "docs/RESEARCH_INDEX.md",
+     "item": "H1: general ICT-style knowledge (not the channels)"
+    }
+   ],
+   "dataset": null,
+   "dataset_note": "none: no MES 5-minute dataset exists (docs/DATA_FINDINGS.md)",
+   "experiments": [
+    "H1_sweep_reversal_v1@levels=prev_rth,target_r=1.5",
+    "H1_sweep_reversal_v1@levels=overnight,target_r=1.5",
+    "H1_sweep_reversal_v1@levels=both,target_r=1.5",
+    "H1_sweep_reversal_v1@levels=prev_rth,target_r=2.0",
+    "H1_sweep_reversal_v1@levels=overnight,target_r=2.0",
+    "H1_sweep_reversal_v1@levels=both,target_r=2.0",
+    "H1_sweep_reversal_v1@levels=prev_rth,target_r=3.0",
+    "H1_sweep_reversal_v1@levels=overnight,target_r=3.0",
+    "H1_sweep_reversal_v1@levels=both,target_r=3.0"
+   ],
+   "validation": [
+    {
+     "doc": "docs/VALIDATION_PLAN.md",
+     "section": "5. Decision rules (numeric, fixed now)"
+    },
+    {
+     "doc": "docs/REVIEW.md",
+     "section": "REVIEW (independent audit, phase 2)"
+    }
+   ],
+   "approval_history": [],
+   "runnable": null,
+   "not_runnable_reason": "NOT RUN: no data. No MES 5-minute dataset exists locally, and this builder only supports registered daily (D3) variants."
+  },
+  {
+   "id": "H2_ttrades_mechanical",
+   "family": "H2",
+   "name": "H2 TTrades fractal model, mechanical approximation",
+   "state": "candidate",
+   "verdict": null,
+   "status_note": "Registered, not implemented (docs/RESEARCH_INDEX.md). No variants counted yet.",
+   "version": "HYPOTHESES_TTRADES (registered; unversioned)",
+   "rules": {
+    "doc": "docs/HYPOTHESES_TTRADES.md",
+    "section": "H2"
+   },
+   "source_research": [
+    {
+     "doc": "docs/SOURCES.md",
+     "item": "@TTrades_edu: Intro To TTrades Fractal Model [Indicator & Settings] (CqMIh-Vvhbg, 2024-11-29)"
+    },
+    {
+     "doc": "docs/SOURCES.md",
+     "item": "@TTrades_edu: TTrades Fractal Model + Inversion (Intraday Strategy) (4jU547ocod4, 2025-03-22)"
+    }
+   ],
+   "dataset": null,
+   "dataset_note": "none: not implemented and the needed 1-minute / 5-minute data does not exist locally",
+   "experiments": [],
+   "validation": [
+    {
+     "doc": "docs/VALIDATION_PLAN.md",
+     "section": "5. Decision rules (numeric, fixed now)"
+    }
+   ],
+   "approval_history": [],
+   "runnable": null,
+   "not_runnable_reason": "not implemented"
+  },
+  {
+   "id": "D3_V1_c2_both",
+   "family": "H3",
+   "name": "H3 daily candle-2 closure \u2014 V1 both sides (primary)",
+   "state": "rejected",
+   "verdict": "REJECTED",
+   "status_note": "REJECTED by the pre-registered rule: train net EV <= 0 at 1.0x costs with n >= 30 (docs/DAILY_RESULTS.md)",
+   "version": "DAILY_SPEC v1 (pre-registered 2026-10-08)",
+   "rules": {
+    "doc": "docs/DAILY_SPEC.md",
+    "section": "Hypothesis H3; Variants"
+   },
+   "source_research": [
+    {
+     "doc": "docs/SOURCES.md",
+     "item": "@TTrades_edu: Intro To TTrades Fractal Model [Indicator & Settings] (CqMIh-Vvhbg, 2024-11-29)"
+    },
+    {
+     "doc": "docs/SOURCES.md",
+     "item": "@TTrades_edu: TTrades Fractal Model + Inversion (Intraday Strategy) (4jU547ocod4, 2025-03-22)"
+    }
+   ],
+   "dataset": {
+    "symbols": [
+     "SPY",
+     "QQQ",
+     "IWM"
+    ],
+    "resolution": "1D",
+    "period": "2022-10-12..2026-10-07",
+    "adjustment": "unadjusted",
+    "manifest": "data/raw/ibkr_connector/MANIFEST.json",
+    "manifest_sha256": {
+     "SPY": "ef0e598f114ca2e5351708ab0dfa78885e4c89e739abec2b689d84686a470483",
+     "QQQ": "527e1eaf01d276b3666bf215e9ad0da2464b4fc3f2d92553e5d549b4854d37eb",
+     "IWM": "37877bb65caba7aff7b804e94388a10e85fb6a7f86aeea2255cfcbf3b0be97bd"
+    }
+   },
+   "experiments": [
+    "D3-V1",
+    "D3-V1 result",
+    "D3-B0",
+    "D3-B0 result"
+   ],
+   "validation": [
+    {
+     "doc": "docs/DAILY_RESULTS.md",
+     "section": "Development verdict (validation.verdict.classify_development, pooled-by-date)"
+    },
+    {
+     "doc": "docs/REVIEW.md",
+     "section": "Daily pipeline audit (phase 3)"
+    },
+    {
+     "doc": "docs/VALIDATION_PLAN.md",
+     "section": "5. Decision rules (numeric, fixed now)"
+    }
+   ],
+   "approval_history": [],
+   "runnable": {
+    "runner": "scripts/run_daily.py",
+    "variant": "D3_V1_c2_both",
+    "experiment_log_id": "D3-V1"
+   },
+   "facts": {
+    "train": {
+     "n": 471,
+     "ev_usd": -5.32
+    },
+    "validation": {
+     "n": 152,
+     "ev_usd": 1.91,
+     "ci_usd": [
+      -26.6,
+      29.5
+     ]
+    },
+    "source": "docs/DAILY_RESULTS.md; docs/EXPERIMENT_LOG.md (D3-V1 result)"
+   }
+  },
+  {
+   "id": "D3_V2_c2_long",
+   "family": "H3",
+   "name": "H3 daily candle-2 closure \u2014 V2 long-only",
+   "state": "rejected",
+   "verdict": "REJECTED",
+   "status_note": "REJECTED (docs/DAILY_RESULTS.md)",
+   "version": "DAILY_SPEC v1 (pre-registered 2026-10-08)",
+   "rules": {
+    "doc": "docs/DAILY_SPEC.md",
+    "section": "Hypothesis H3; Variants"
+   },
+   "source_research": [
+    {
+     "doc": "docs/SOURCES.md",
+     "item": "@TTrades_edu: Intro To TTrades Fractal Model [Indicator & Settings] (CqMIh-Vvhbg, 2024-11-29)"
+    },
+    {
+     "doc": "docs/SOURCES.md",
+     "item": "@TTrades_edu: TTrades Fractal Model + Inversion (Intraday Strategy) (4jU547ocod4, 2025-03-22)"
+    }
+   ],
+   "dataset": {
+    "symbols": [
+     "SPY",
+     "QQQ",
+     "IWM"
+    ],
+    "resolution": "1D",
+    "period": "2022-10-12..2026-10-07",
+    "adjustment": "unadjusted",
+    "manifest": "data/raw/ibkr_connector/MANIFEST.json",
+    "manifest_sha256": {
+     "SPY": "ef0e598f114ca2e5351708ab0dfa78885e4c89e739abec2b689d84686a470483",
+     "QQQ": "527e1eaf01d276b3666bf215e9ad0da2464b4fc3f2d92553e5d549b4854d37eb",
+     "IWM": "37877bb65caba7aff7b804e94388a10e85fb6a7f86aeea2255cfcbf3b0be97bd"
+    }
+   },
+   "experiments": [
+    "D3-V2",
+    "D3-V2 result",
+    "D3-B0",
+    "D3-B0 result"
+   ],
+   "validation": [
+    {
+     "doc": "docs/DAILY_RESULTS.md",
+     "section": "Development verdict (validation.verdict.classify_development, pooled-by-date)"
+    },
+    {
+     "doc": "docs/REVIEW.md",
+     "section": "Daily pipeline audit (phase 3)"
+    },
+    {
+     "doc": "docs/VALIDATION_PLAN.md",
+     "section": "5. Decision rules (numeric, fixed now)"
+    }
+   ],
+   "approval_history": [],
+   "runnable": {
+    "runner": "scripts/run_daily.py",
+    "variant": "D3_V2_c2_long",
+    "experiment_log_id": "D3-V2"
+   },
+   "facts": {
+    "train": {
+     "n": 236,
+     "ev_usd": -18.43
+    },
+    "validation": {
+     "n": 76,
+     "ev_usd": -4.76
+    },
+    "source": "docs/EXPERIMENT_LOG.md (D3-V2 result)"
+   }
+  },
+  {
+   "id": "D3_V3_c2_short",
+   "family": "H3",
+   "name": "H3 daily candle-2 closure \u2014 V3 short-only",
+   "state": "testing",
+   "verdict": "INCONCLUSIVE",
+   "status_note": "INCONCLUSIVE: fails the sample gate n_val >= 100 [76], CI, Bonferroni, DSR, quarter consistency, concentration and baseline gates (docs/DAILY_RESULTS.md). Not an edge.",
+   "version": "DAILY_SPEC v1 (pre-registered 2026-10-08)",
+   "rules": {
+    "doc": "docs/DAILY_SPEC.md",
+    "section": "Hypothesis H3; Variants"
+   },
+   "source_research": [
+    {
+     "doc": "docs/SOURCES.md",
+     "item": "@TTrades_edu: Intro To TTrades Fractal Model [Indicator & Settings] (CqMIh-Vvhbg, 2024-11-29)"
+    },
+    {
+     "doc": "docs/SOURCES.md",
+     "item": "@TTrades_edu: TTrades Fractal Model + Inversion (Intraday Strategy) (4jU547ocod4, 2025-03-22)"
+    }
+   ],
+   "dataset": {
+    "symbols": [
+     "SPY",
+     "QQQ",
+     "IWM"
+    ],
+    "resolution": "1D",
+    "period": "2022-10-12..2026-10-07",
+    "adjustment": "unadjusted",
+    "manifest": "data/raw/ibkr_connector/MANIFEST.json",
+    "manifest_sha256": {
+     "SPY": "ef0e598f114ca2e5351708ab0dfa78885e4c89e739abec2b689d84686a470483",
+     "QQQ": "527e1eaf01d276b3666bf215e9ad0da2464b4fc3f2d92553e5d549b4854d37eb",
+     "IWM": "37877bb65caba7aff7b804e94388a10e85fb6a7f86aeea2255cfcbf3b0be97bd"
+    }
+   },
+   "experiments": [
+    "D3-V3",
+    "D3-V3 result",
+    "D3-B0",
+    "D3-B0 result"
+   ],
+   "validation": [
+    {
+     "doc": "docs/DAILY_RESULTS.md",
+     "section": "Development verdict (validation.verdict.classify_development, pooled-by-date)"
+    },
+    {
+     "doc": "docs/REVIEW.md",
+     "section": "Daily pipeline audit (phase 3)"
+    },
+    {
+     "doc": "docs/VALIDATION_PLAN.md",
+     "section": "5. Decision rules (numeric, fixed now)"
+    }
+   ],
+   "approval_history": [],
+   "runnable": {
+    "runner": "scripts/run_daily.py",
+    "variant": "D3_V3_c2_short",
+    "experiment_log_id": "D3-V3"
+   },
+   "facts": {
+    "train": {
+     "n": 235,
+     "ev_usd": 7.84
+    },
+    "validation": {
+     "n": 76,
+     "ev_usd": 8.57,
+     "ci_usd": [
+      -43.4,
+      53.5
+     ]
+    },
+    "source": "docs/EXPERIMENT_LOG.md (D3-V3 result)"
+   }
+  }
+ ]
+}

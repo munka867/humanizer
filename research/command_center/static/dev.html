@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workspace dev harness</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/static/css/tokens.css">
+<link rel="stylesheet" href="/static/css/base.css">
+<link rel="stylesheet" href="/static/css/components.css">
+<link rel="stylesheet" href="/static/css/shell.css">
+<style>body{overflow:auto}.dev-bar{display:flex;gap:8px;align-items:center;padding:8px 16px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:30;flex-wrap:wrap}.dev-main{padding:var(--s5)}</style>
+</head>
+<body>
+<div class="dev-bar" id="devbar" role="toolbar" aria-label="Dev harness controls"></div>
+<main class="dev-main" id="workspace" aria-label="Workspace under test"></main>
+<script type="module" src="/static/js/core/dev.js"></script>
+</body>
+</html>

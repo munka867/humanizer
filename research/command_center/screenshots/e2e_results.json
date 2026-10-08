@@ -62,7 +62,7 @@
  {
   "check": "emit.py accepted",
   "pass": true,
-  "detail": "{\"ok\": true, \"accepted\": [{\"event_id\": \"ea491c8baaf442f7815ea7f0181b85a9\", \"seq\": 34}], \"duplicates\": [], \"rejected\": []"
+  "detail": "{\"ok\": true, \"accepted\": [{\"event_id\": \"5e8c424bbff84d06b088c4c8ee1ad2d1\", \"seq\": 34}], \"duplicates\": [], \"rejected\": []"
  },
  {
   "check": "emitted message.sent pulses lead>backtester edge",
@@ -107,7 +107,7 @@
  {
   "check": "STALE banner text",
   "pass": true,
-  "detail": "STALE: showing last known state as of 04:17:55"
+  "detail": "STALE: showing last known state as of 04:20:39"
  },
  {
   "check": "STALE greys the UI",

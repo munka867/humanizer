@@ -33,6 +33,7 @@ def snapshot(events: list[dict], run_id, max_seq: int, concurrency_budget: int =
     concurrency = None
     sources: set[str] = set()
     last_ts = None
+    status_done: list[tuple] = []  # (agent, task text, seq) for transitions into 'complete'
 
     def touch(a, ts, demo):
         if a in agents:
@@ -52,6 +53,8 @@ def snapshot(events: list[dict], run_id, max_seq: int, concurrency_budget: int =
             ag = agents[aid]
             if ag["status"] != p["status"]:
                 ag["status_since"] = ts
+                if p["status"] == "complete":
+                    status_done.append((aid, p.get("task"), e["seq"]))
             ag["status"] = p["status"]
             ag["task"] = p.get("task")
             ag["reported_blockers"] = p.get("blockers") or []
@@ -106,9 +109,22 @@ def snapshot(events: list[dict], run_id, max_seq: int, concurrency_budget: int =
             if p["command"] == "set_concurrency" and p["accepted"]:
                 concurrency = p.get("args", {}).get("value")
 
+    # completed_count rule: distinct completed tasks owned by the agent (task.created/updated -> complete)
+    # + each agent.status transition into 'complete' whose task text is not already a counted task title
+    # (deduped by task text; with no task text each transition counts once).
+    done_titles: dict[str, set] = {a: set() for a in agents}
     for tk in tasks.values():
         if tk["owner"] in agents and tk["status"] == "complete":
             agents[tk["owner"]]["completed_count"] += 1
+            done_titles[tk["owner"]].add(tk["title"])
+    counted: dict[str, set] = {a: set() for a in agents}
+    for a, task_text, seq in status_done:
+        key = task_text if task_text else f"#seq{seq}"
+        if key in done_titles[a] or key in counted[a]:
+            continue
+        counted[a].add(key)
+        agents[a]["completed_count"] += 1
+    for tk in tasks.values():
         tk["depends_on"] = [d["depends_on"] for d in deps if d["task_id"] == tk["task_id"]]
         tk["unmet"] = [d for d in tk["depends_on"] if tasks.get(d, {}).get("status") != "complete"]
     for a, ag in agents.items():

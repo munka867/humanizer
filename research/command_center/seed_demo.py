@@ -47,7 +47,7 @@ def demo_events(run_id="demo-run-1", base=None):
     ev(14, "task.updated", "backtester", task_id="D3", status="awaiting_dependency")
     ev(18, "artifact.created", "data_ibkr", path="docs/DATA_REQUEST.md", title="DEMO artifact link (existing doc, not produced by a demo agent)")
     ev(20, "task.updated", "data_ibkr", task_id="D1", status="complete")
-    ev(20, "agent.status", "data_ibkr", status="complete", task="DEMO: prepare data request")
+    ev(20, "agent.status", "data_ibkr", status="complete", task="DEMO: define data request")
     ev(22, "message.sent", "data_ibkr", sender="data_ibkr", recipient="backtester", preview="DEMO: data request is ready")
     ev(24, "decision.summary", "strategy_researcher", summary="DEMO: keep the spec to one strategy, as per project rules", sources=["research/CLAUDE.md"])
     ev(26, "test.result", "validator", name="DEMO placeholder check", outcome="skip", detail="DEMO row only - no test was run")

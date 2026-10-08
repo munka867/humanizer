@@ -224,8 +224,8 @@ function panKey(ev) { const d = 40; if (ev.key === "ArrowLeft") S.view0.x += d; 
 function applyView() { const v = S.view0; G.root.setAttribute("transform", `translate(${v.x},${v.y}) scale(${v.k})`); }
 function fitGraph() {
   const r = G.svg.getBoundingClientRect(); if (!r.width) return;
-  const w = 640, hgt = 410 + TH + 40; const k = Math.min(r.width / w, r.height / hgt, 1.4);
-  S.view0 = {k, x: r.width / 2 + 25 * k, y: (r.height - hgt * k) / 2 + (TH / 2 + 12) * k, auto: true}; G.fitted = true; applyView();
+  const w = 640, hgt = 410 + TH + 60; const k = Math.min(r.width / w, r.height / hgt, 1.4);
+  S.view0 = {k, x: r.width / 2 + 25 * k, y: (r.height - hgt * k) / 2 + (TH / 2 + 28) * k, auto: true}; G.fitted = true; applyView();
 }
 function zoomAt(f, cx, cy) {
   const r = G.svg.getBoundingClientRect(); cx = (cx == null ? r.left + r.width / 2 : cx) - r.left; cy = (cy == null ? r.top + r.height / 2 : cy) - r.top;

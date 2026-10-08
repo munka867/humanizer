@@ -1,0 +1,6 @@
+# Runtime: NONE. The server is Python stdlib only (http.server + sqlite3), the UI is static HTML/JS/CSS.
+# FastAPI (0.142.4 on PyPI at time of writing) was deliberately not used: a threaded stdlib server
+# needs no install and handles SSE with plain threads.
+# Dev / verification only (pinned to the versions installed and verified here):
+pytest==9.1.1
+playwright==1.63.0   # only for verify_e2e.py; uses the preinstalled /opt/pw-browsers Chromium (do NOT run `playwright install`)

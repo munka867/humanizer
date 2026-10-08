@@ -32,7 +32,7 @@ COMMANDS = ("assign_task", "request_update", "cancel_research", "approve_proposa
 EVENT_TYPES = (
     "agent.status", "task.created", "task.updated", "task.dependency", "message.sent",
     "tool.activity", "artifact.created", "test.result", "decision.summary", "incident",
-    "mode.changed", "approval.requested", "approval.resolved", "heartbeat", "command.recorded",
+    "mode.changed", "approval.requested", "approval.resolved", "heartbeat", "command.recorded", "audit.config",
 )
 MAX_PAYLOAD_BYTES = 64 * 1024
 _ID_RE = re.compile(r"^[A-Za-z0-9_.:\-]{1,128}$")
@@ -90,6 +90,44 @@ def _msg(v, name):
     _str(v, name, 500)
 
 
+_SECRET_KEY_RE = re.compile(r"token|secret|passw|api[_-]?key|credential|authorization", re.I)
+
+
+def _no_secret_keys(v, name, depth=0):
+    if depth > 6:
+        raise ValidationError(f"payload.{name} nested too deeply")
+    if isinstance(v, dict):
+        for k, x in v.items():
+            if _SECRET_KEY_RE.search(str(k)):
+                raise ValidationError(f"payload.{name} must not carry secrets (key {k!r}); audit records never store credentials")
+            _no_secret_keys(x, name, depth + 1)
+    elif isinstance(v, list):
+        for x in v:
+            _no_secret_keys(x, name, depth + 1)
+
+
+def _jsonval(v, name):
+    """Small JSON value (scalar / small structure) used for audit old/new values."""
+    try:
+        blob = json.dumps(v)
+    except (TypeError, ValueError):
+        raise ValidationError(f"payload.{name} must be JSON-serialisable") from None
+    if len(blob) > 2000:
+        raise ValidationError(f"payload.{name} too long (>2000 chars as JSON)")
+    _no_secret_keys(v, name)
+
+
+def _audit_detail(v, name):
+    _dict(v, name)
+    _jsonval(v, name)
+
+
+def _label(v, name):
+    _str(v, name, 128)
+    if not re.fullmatch(r"[A-Za-z0-9_.:\- ]{1,128}", v):
+        raise ValidationError(f"payload.{name} may only contain letters, digits and _ . : - space")
+
+
 # type -> version -> {"required": {field: check}, "optional": {field: check}, "needs_agent": bool}
 SCHEMAS: dict[str, dict[int, dict[str, Any]]] = {
     "agent.status": {1: {"needs_agent": True, "required": {"status": _enum(AGENT_STATUSES)},
@@ -113,6 +151,10 @@ SCHEMAS: dict[str, dict[int, dict[str, Any]]] = {
     "approval.resolved": {1: {"required": {"approval_id": _str, "resolution": _enum(("approved", "rejected", "expired"))},
                               "optional": {"note": _opt_str}}},
     "heartbeat": {1: {"needs_agent": True, "required": {}, "optional": {}}},
+    "audit.config": {1: {"required": {"area": _label, "action": _label},
+                         "optional": {"target": _opt_str, "old": _jsonval, "new": _jsonval,
+                                      "outcome": _enum(("applied", "refused", "failed", "info")), "reason": _opt_str,
+                                      "detail": _audit_detail}}},
     "command.recorded": {1: {"required": {"command": _enum(COMMANDS), "accepted": _bool, "runtime_attached": _bool, "message": _str},
                              "optional": {"args": _dict}}},
 }

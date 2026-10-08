@@ -4,7 +4,11 @@
     python scripts/run_daily.py --segment validation          # also computes train for the verdict inputs
     python scripts/run_daily.py --segment test --variant D3_V1_c2_both   # REFUSED unless a freeze record exists
     python scripts/run_daily.py --freeze D3_V1_c2_both         # coordinator only: records the freeze, reads no data
-Outputs: results/daily/<segment>_summary.json and results/daily/<segment>_report.md (aggregates only, no raw bars)."""
+Outputs: results/daily/<segment>_summary.json and results/daily/<segment>_report.md (aggregates only, no raw bars).
+Optional (command-centre experiment builder; defaults leave the committed behaviour unchanged):
+    --out-dir DIR   write outputs there instead of results/daily      --data-dir DIR   read {SYMBOL}_1d.csv from DIR
+    --symbols A,B   restrict the universe (subset of the configured one)   --seed N   override all three seeds
+    --progress      emit machine-readable '##PROGRESS {json}' lines on stderr after each finished step."""
 from __future__ import annotations
 
 import argparse
@@ -26,6 +30,18 @@ from tradelab.validation.splits import apply_split, classify_trades, make_split 
 from tradelab.validation.verdict import classify_development  # noqa: E402
 
 OUT = ROOT / "results" / "daily"
+_P = {"on": False, "done": 0, "total": 0}
+
+
+def _plan(total: int) -> None:
+    _P["done"], _P["total"] = 0, total
+
+
+def _step(name: str) -> None:
+    """Progress is only reported after a step has really finished (never estimated)."""
+    _P["done"] += 1
+    if _P["on"]:
+        print("##PROGRESS " + json.dumps({"step": name, "done": _P["done"], "total": _P["total"]}), file=sys.stderr, flush=True)
 
 
 def load_cfg():
@@ -67,7 +83,7 @@ def seg_candidates(bars, cfg, split, seg):
     return out
 
 
-def analyse(seg, cfg, costs, bars, split, variants):
+def analyse(seg, cfg, costs, bars, split, variants, progress=False):
     nv = cfg["n_variants_registered_overall"]
     seeds = cfg["seeds"]
     cands = seg_candidates(bars, cfg, split, seg)
@@ -82,6 +98,8 @@ def analyse(seg, cfg, costs, bars, split, variants):
                               "ev_r": float(d0_all["r_multiple"].mean())},
                    **{s: {"n": len(t), "ev_usd": float(t["pnl_net"].mean()), "ev_bps": float(R.bps_of(t).mean()),
                           "ev_r": float(t["r_multiple"].mean())} for s, t in d0.items()}}
+    if progress:
+        _step(f"{seg}: baseline B_D0")
     trades_by_variant = {}
     for v in variants:
         which = cfg["variants"][v]["sides"]
@@ -101,6 +119,8 @@ def analyse(seg, cfg, costs, bars, split, variants):
             obs = {"usd": float(t["pnl_net"].mean()), "r": float(t["r_multiple"].mean()), "bps": float(R.bps_of(t).mean())}
             vr["B_D1"] = B.null_summary(null, obs)
         res["variants"][v] = vr
+        if progress:
+            _step(f"{seg}: {v} (summary, cost stress, Monte Carlo, B_D1)")
     return res, trades_by_variant
 
 
@@ -199,18 +219,25 @@ def jdefault(o):
     raise TypeError(type(o))
 
 
-def run_segment(seg, cfg, costs_raw, variants):
+def run_segment(seg, cfg, costs_raw, variants, out=None):
+    out = Path(out) if out else OUT
+    _plan(1 + (1 + len(variants)) + (len(variants) if seg == "validation" else 0) + 1)
     costs, bars, split = build(cfg, costs_raw)
-    OUT.mkdir(parents=True, exist_ok=True)
-    res, _ = analyse(seg, cfg, costs, bars, split, variants)
+    _step("load bars, build chronological split")
+    out.mkdir(parents=True, exist_ok=True)
+    res, _ = analyse(seg, cfg, costs, bars, split, variants, progress=True)
     verdict = None
     if seg == "validation":
-        verdict = {v: verdict_inputs(cfg, costs, bars, split, v) for v in variants}
+        verdict = {}
+        for v in variants:
+            verdict[v] = verdict_inputs(cfg, costs, bars, split, v)
+            _step(f"verdict inputs (train+validation): {v}")
     res["verdict"] = verdict
     res["split"] = {"train": [str(x) for x in split.train], "validation": [str(x) for x in split.validation], "purge": str(split.purge)}
-    (OUT / f"{seg}_summary.json").write_text(json.dumps(res, indent=1, default=jdefault))
+    (out / f"{seg}_summary.json").write_text(json.dumps(res, indent=1, default=jdefault))
     md = md_report(res, verdict)
-    (OUT / f"{seg}_report.md").write_text(md)
+    (out / f"{seg}_report.md").write_text(md)
+    _step("write summary.json and report.md")
     return md
 
 
@@ -219,8 +246,25 @@ def main(argv=None) -> int:
     ap.add_argument("--segment", choices=["train", "validation", "test"])
     ap.add_argument("--variant", help="single variant (required for --segment test)")
     ap.add_argument("--freeze", metavar="VARIANT", help="record a freeze for VARIANT (coordinator only)")
+    ap.add_argument("--out-dir", help="write outputs here instead of results/daily")
+    ap.add_argument("--data-dir", help="directory holding {SYMBOL}_1d.csv (default: configs data_dir)")
+    ap.add_argument("--symbols", help="comma-separated subset of the configured universe")
+    ap.add_argument("--seed", type=int, help="override baseline/bootstrap/montecarlo seeds")
+    ap.add_argument("--progress", action="store_true", help="emit ##PROGRESS lines on stderr")
     a = ap.parse_args(argv)
     cfg, costs_raw = load_cfg()
+    _P["on"] = bool(a.progress)
+    if a.symbols:
+        syms = [x.strip() for x in a.symbols.split(",") if x.strip()]
+        bad = [x for x in syms if x not in cfg["universe"]]
+        if not syms or bad:
+            print(f"REFUSED: --symbols must be a non-empty subset of {cfg['universe']} (got {bad or syms})", file=sys.stderr)
+            return 2
+        cfg["universe"] = syms
+    if a.data_dir:
+        cfg["data_dir"] = str(Path(a.data_dir).resolve())
+    if a.seed is not None:
+        cfg["seeds"] = {k: int(a.seed) for k in cfg["seeds"]}
     if a.freeze:
         rec = G.freeze_config(sid(cfg, a.freeze), config_hash_for(a.freeze, cfg, costs_raw), note="daily H3 freeze")
         print("frozen:", rec["strategy_id"], rec["config_hash"][:12])
@@ -233,14 +277,14 @@ def main(argv=None) -> int:
             print("REFUSED: --segment test needs exactly one --variant (the frozen one).", file=sys.stderr)
             return 2
         try:
-            r = guard_test_segment(a.variant, cfg, costs_raw, lambda: run_segment("test", cfg, costs_raw, variants))
+            r = guard_test_segment(a.variant, cfg, costs_raw, lambda: run_segment("test", cfg, costs_raw, variants, a.out_dir))
         except G.FinalTestRefused as e:
             print(str(e), file=sys.stderr)
             return 2
         print(r.banner)
         print(r.result)
         return 0
-    print(run_segment(a.segment, cfg, costs_raw, variants))
+    print(run_segment(a.segment, cfg, costs_raw, variants, a.out_dir))
     return 0
 
 

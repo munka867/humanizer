@@ -136,7 +136,7 @@ export function createWatchManager(ctx, S, { onSelect, getSelected }) {
     { key: "grip", label: "", width: 40, minWidth: 40, sortable: false, hideable: false, render: (r) => { const g = el("span", { class: ["mk-grip", canDrag() ? "" : "off"], draggable: canDrag() ? "true" : null, title: canDrag() ? "Drag to reorder (or use the move buttons)" : "Reordering needs manual order and no filter", "aria-hidden": "true", dataset: { key: r.key } }, "⋮⋮");
         g.addEventListener("dragstart", (e) => { e.dataTransfer.setData("text/plain", r.key); e.dataTransfer.effectAllowed = "move"; }); return g; } },
     { key: "symbol", label: "Symbol", width: 96, sortable: false, render: (r) => el("b", { class: "mk-symcell", dataset: { rowkey: r.key }, tabindex: -1 }, r.symbol) },
-    { key: "name", label: "Name", width: 130, sortable: false, value: (r) => r.name, missing: "Company name unavailable: no entitled source connected" },
+    { key: "name", label: "Name", width: 100, sortable: false, value: (r) => r.name, missing: "Company name unavailable: no entitled source connected" },
     { key: "exchange", label: "Exchange", width: 90, sortable: false },
     { key: "conid", label: "conId", width: 100, align: "num", sortable: false, format: "qty" },
     { key: "currency", label: "Ccy", width: 56, sortable: false, missing: "Currency not stated in the data manifest" },
@@ -144,8 +144,8 @@ export function createWatchManager(ctx, S, { onSelect, getSelected }) {
     { key: "chg", label: "Change", width: 82, align: "num", sortable: false, render: (r) => chgCell(r, "chg") },
     { key: "pct", label: "% chg", width: 82, align: "num", sortable: false, render: (r) => chgCell(r, "pct") },
     { key: "vol", label: "Volume", width: 92, align: "num", sortable: false, render: (r) => (r.quote ? fmt.cell(r.quote.volume, "compact") : fmt.missing(r.qerr || "No quote")) },
-    { key: "fresh", label: "Quote", width: 190, sortable: false, render: (r) => { if (!r.quote) return ui.badge("neutral", "No quote", "dash"); const f = quoteFreshness(r.quote); const b = ui.badge(f.kind, `${f.label} ${r.quote.as_of}`, f.icon); b.title = f.why; return b; } },
-    { key: "act", label: "Actions", width: 130, sortable: false, hideable: false, render: (r) => { const n = S.active().items.length, i = S.active().items.findIndex((x) => keyOf(x) === r.key), dis = !canDrag();
+    { key: "fresh", label: "Quote", width: 172, sortable: false, render: (r) => { if (!r.quote) return ui.badge("neutral", "No quote", "dash"); const f = quoteFreshness(r.quote); const b = ui.badge(f.kind, `${f.label} ${r.quote.as_of}`, f.icon); b.title = f.why; return b; } },
+    { key: "act", label: "Actions", width: 120, sortable: false, hideable: false, render: (r) => { const n = S.active().items.length, i = S.active().items.findIndex((x) => keyOf(x) === r.key), dis = !canDrag();
         const mk = (lab, aria, fn, d) => { const b = el("button", { type: "button", class: "icon-btn mk-mv", "aria-label": `${aria} ${r.symbol} ${r.exchange}`, title: dis && aria !== "Remove" ? "Needs manual order and no filter" : aria, disabled: d }, lab); b.addEventListener("click", (e) => { e.stopPropagation(); fn(); }); return b; };
         return el("span", { class: "mk-acts" }, mk("↑", "Move up", () => move(r.key, -1), dis || i <= 0), mk("↓", "Move down", () => move(r.key, 1), dis || i >= n - 1), mk("✕", "Remove", () => remove(r))); } },
   ];

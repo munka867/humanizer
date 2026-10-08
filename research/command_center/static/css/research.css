@@ -73,3 +73,4 @@ pre.tail { margin: 0; padding: var(--s3); background: var(--bg); border: 1px sol
 .stack { display: grid; gap: var(--s3); min-width: 0; }
 .rs h4 { font-size: var(--fs-secondary); font-weight: 600; color: var(--text-2); text-transform: none; }
 .clamp2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; line-height: 1.3; }
+.rs .tbl-table th:last-child .th-grip { right: 0; }

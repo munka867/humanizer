@@ -37,13 +37,13 @@ export default {
         onRowActivate: (s) => openDetail(s.id), onRowClick: (s) => openDetail(s.id),
         emptyTitle: "No strategies match", emptyWhy: "Change the filters. The registry itself is configs/strategies.json.",
         columns: [
-          { key: "name", label: "Strategy", width: 230, value: (s) => s.name, render: (s) => clamp(s.name) },
-          { key: "family", label: "Family", width: 56 },
+          { key: "name", label: "Strategy", width: 225, value: (s) => s.name, render: (s) => clamp(s.name) },
+          { key: "family", label: "Family", width: 70 },
           { key: "state", label: "State", width: 125, render: (s) => stateBadge(ctx, s.state) },
           { key: "verdict", label: "Pipeline verdict", width: 160, value: (s) => s.verdict, render: (s) => verdictBadge(ctx, s.verdict), missing: "No run has produced a verdict" },
           { key: "version", label: "Version", width: 150, render: (s) => clamp(s.version) },
           { key: "n_exp", label: "Experiments", align: "num", width: 96, value: (s) => s.experiments.length, format: "qty" },
-          { key: "note", label: "Status", width: 275, value: (s) => (s.runnable ? "Runnable. " : "Not runnable. ") + s.status_note, render: (s) => clamp((s.runnable ? "Runnable. " : "Not runnable. ") + s.status_note) },
+          { key: "note", label: "Status", width: 248, value: (s) => (s.runnable ? "Runnable. " : "Not runnable. ") + s.status_note, render: (s) => clamp((s.runnable ? "Runnable. " : "Not runnable. ") + s.status_note) },
         ] });
       tableSlot.replaceChildren(tbl.el);
     };

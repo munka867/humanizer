@@ -219,13 +219,37 @@ def jdefault(o):
     raise TypeError(type(o))
 
 
-def run_segment(seg, cfg, costs_raw, variants, out=None):
+def write_series(out: Path, trades_by_variant: dict) -> None:
+    """daily_series.csv (aggregates by NY entry date; cumulative net P&L 'equity' starts at 0, no prices) and trades.csv (local trade log)."""
+    import csv
+    ny = "America/New_York"
+    with open(out / "daily_series.csv", "w", newline="") as fs, open(out / "trades.csv", "w", newline="") as ft:
+        ws = csv.writer(fs)
+        ws.writerow(["variant", "date", "net_pnl", "gross_pnl", "costs", "n_trades", "equity", "drawdown"])
+        wt = csv.writer(ft)
+        wt.writerow(["variant", "trade_id", "symbol", "side", "entry_date", "exit_date", "qty", "entry_px", "exit_px", "pnl_gross", "costs", "pnl_net", "r_multiple"])
+        for v, t in trades_by_variant.items():
+            if len(t) == 0:
+                continue
+            d = t.assign(_d=t["entry_ts"].dt.tz_convert(ny).dt.strftime("%Y-%m-%d"))
+            g = d.groupby("_d").agg(net=("pnl_net", "sum"), gross=("pnl_gross", "sum"), costs=("costs", "sum"), n=("pnl_net", "size")).sort_index()
+            eq = g["net"].cumsum()
+            dd = eq - np.maximum.accumulate(np.maximum(eq.to_numpy(), 0.0))
+            for (day, r), e, k in zip(g.iterrows(), eq, dd):
+                ws.writerow([v, day, f"{r.net:.6f}", f"{r.gross:.6f}", f"{r.costs:.6f}", int(r.n), f"{e:.6f}", f"{k:.6f}"])
+            for _, r in d.sort_values("entry_ts").iterrows():
+                wt.writerow([v, int(r.trade_id), r.symbol, int(r.side), r.entry_ts.tz_convert(ny).strftime("%Y-%m-%d"),
+                             r.exit_ts.tz_convert(ny).strftime("%Y-%m-%d"), f"{r.qty:.6f}", f"{r.entry_px:.4f}", f"{r.exit_px:.4f}",
+                             f"{r.pnl_gross:.6f}", f"{r.costs:.6f}", f"{r.pnl_net:.6f}", f"{r.r_multiple:.6f}"])
+
+
+def run_segment(seg, cfg, costs_raw, variants, out=None, series=False):
     out = Path(out) if out else OUT
     _plan(1 + (1 + len(variants)) + (len(variants) if seg == "validation" else 0) + 1)
     costs, bars, split = build(cfg, costs_raw)
     _step("load bars, build chronological split")
     out.mkdir(parents=True, exist_ok=True)
-    res, _ = analyse(seg, cfg, costs, bars, split, variants, progress=True)
+    res, tbv = analyse(seg, cfg, costs, bars, split, variants, progress=True)
     verdict = None
     if seg == "validation":
         verdict = {}
@@ -234,6 +258,8 @@ def run_segment(seg, cfg, costs_raw, variants, out=None):
             _step(f"verdict inputs (train+validation): {v}")
     res["verdict"] = verdict
     res["split"] = {"train": [str(x) for x in split.train], "validation": [str(x) for x in split.validation], "purge": str(split.purge)}
+    if series:
+        write_series(out, tbv)
     (out / f"{seg}_summary.json").write_text(json.dumps(res, indent=1, default=jdefault))
     md = md_report(res, verdict)
     (out / f"{seg}_report.md").write_text(md)
@@ -277,14 +303,14 @@ def main(argv=None) -> int:
             print("REFUSED: --segment test needs exactly one --variant (the frozen one).", file=sys.stderr)
             return 2
         try:
-            r = guard_test_segment(a.variant, cfg, costs_raw, lambda: run_segment("test", cfg, costs_raw, variants, a.out_dir))
+            r = guard_test_segment(a.variant, cfg, costs_raw, lambda: run_segment("test", cfg, costs_raw, variants, a.out_dir, series=bool(a.out_dir)))
         except G.FinalTestRefused as e:
             print(str(e), file=sys.stderr)
             return 2
         print(r.banner)
         print(r.result)
         return 0
-    print(run_segment(a.segment, cfg, costs_raw, variants, a.out_dir))
+    print(run_segment(a.segment, cfg, costs_raw, variants, a.out_dir, series=bool(a.out_dir)))
     return 0
 
 

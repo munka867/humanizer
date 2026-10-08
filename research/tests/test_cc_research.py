@@ -524,7 +524,9 @@ def test_no_shell_true_no_order_routes_no_broker_imports():
     router.load_modules()
     for m, rx, fn in router.ROUTES:
         if fn.__module__ in ("command_center.api_research", "command_center.api_data"):
-            assert not re.search(r"order|trade|execut|position|broker|live", rx.pattern, re.I), rx.pattern
+            assert not re.search(r"order|execut|position|broker|live", rx.pattern, re.I), rx.pattern
+            if m == "POST":                       # the read-only trade log is the only 'trade' route and is GET
+                assert "trade" not in rx.pattern
     # approved_* can never be written to the state table by this module
     assert "approved" not in " ".join(api_research.MUTABLE_STATES)
 
@@ -532,3 +534,38 @@ def test_no_shell_true_no_order_routes_no_broker_imports():
 def test_json_helpers_nan_safe():
     assert api_data.clean({"a": float("nan"), "b": [float("inf"), 1.0]}) == {"a": None, "b": [None, 1.0]}
     assert not math.isnan(1.0)
+
+
+# ------------------------------------------------------------------ series / trades / reproduction (phase 2)
+def test_experiment_series_and_trades(env):
+    srv, _, _ = env
+    st, r = call(srv, "POST", "/api/experiments", {"strategy_id": "D3_V1_c2_both", "symbols": ["SPY", "QQQ"], "segment": "train"})
+    assert st == 202
+    j = wait_done(srv, r["experiment"]["id"])
+    assert j["status"] == "completed"
+    st, ser = call(srv, "GET", f"/api/experiments/{j['id']}/series")
+    assert st == 200 and ser["columns"][0] == "date" and ser["rows"] and "equity" in ser["definitions"]
+    eq = [row[5] for row in ser["rows"]]
+    net = [row[1] for row in ser["rows"]]
+    assert abs(eq[-1] - sum(net)) < 1e-4 and all(row[6] <= 1e-9 for row in ser["rows"])
+    st, tr = call(srv, "GET", f"/api/experiments/{j['id']}/trades?limit=5&offset=2")
+    assert st == 200 and len(tr["trades"]) == 5 and tr["offset"] == 2 and tr["total"] >= 5
+    res = call(srv, "GET", f"/api/experiments/{j['id']}/result")[1]
+    assert tr["total"] == res["evidence"]["training"]["metrics"]["pooled"]["n"] == sum(row[4] for row in ser["rows"])
+    assert call(srv, "GET", f"/api/experiments/{j['id']}/trades?limit=x")[0] == 400
+    assert call(srv, "GET", "/api/experiments/exp_20200101T000000_deadbeef/series")[0] == 404
+
+
+def test_committed_reproduction_equals_committed_files(env):
+    if not (ROOT / "data" / "processed" / "SPY_1d.csv").is_file():
+        pytest.skip("local market data not present")
+    from command_center import repro_committed
+    srv, paths, tp = env
+    rep = repro_committed.reproduce(ROOT, out_base=paths["experiments_dir"] / "committed_repro")
+    assert rep["all_equal"], rep                      # loud failure on any mismatch with results/daily/*_summary.json
+    st, ser = call(srv, "GET", "/api/runs/committed/committed:validation:D3_V3_c2_short/series")
+    assert st == 200 and ser["reproduction_equals_committed_summary"] is True
+    committed = json.loads((ROOT / "results/daily/validation_summary.json").read_text())
+    assert sum(r[4] for r in ser["rows"]) == committed["variants"]["D3_V3_c2_short"]["pooled"]["n"]
+    st, tr = call(srv, "GET", "/api/runs/committed/committed:train:D3_V1_c2_both/trades?limit=3")
+    assert st == 200 and tr["total"] == 471

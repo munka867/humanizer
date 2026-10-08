@@ -218,7 +218,7 @@ def api_bars(h, m, q, body):
                 "source": "IBKR connector (daily files)", "feed": "delayed", "delayed_seconds": ins["delayed_seconds"],
                 "retrieved_on": ins["retrieved_on"], "adjusted_for_dividends": ins["adjusted_for_dividends"], "session": "regular",
                 "timezone": "America/New_York", "bar_time_label": "session", "interval": interval,
-                "first": bars[0]["time"] if bars else None, "last": bars[-1]["time"] if bars else None, "n": len(bars)}
+                "last_session": rows[-1]["date"].isoformat() if rows else None, "first": bars[0]["time"] if bars else None, "last": bars[-1]["time"] if bars else None, "n": len(bars)}
         return h._json(200, {"meta": meta, "bars": bars,
                              "limits": {"intervals": list(INTERVALS), "intraday": "unavailable: no intraday history source connected",
                                         "extended_hours": "unavailable"}})
@@ -261,7 +261,7 @@ def api_quotes(h, m, q, body):
             try:
                 quotes.append(quote_for(resolve(sym, ex or None), today))
             except ApiError as e:
-                errors.append({"symbol": sym.upper(), "error": e.msg, **e.extra})
+                errors.append({"symbol": sym.upper(), "exchange": ex.upper() or None, "error": e.msg, **e.extra})
         return h._json(200, {"quotes": quotes, "errors": errors, "server_date_ny": today.isoformat(),
                              "note": "Historical daily closes only; no streaming quotes. Extended-hours change: " + UNAVAILABLE})
     return _guard(h, go)

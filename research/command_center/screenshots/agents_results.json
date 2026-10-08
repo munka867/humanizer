@@ -1,0 +1,557 @@
+[
+ {
+  "name": "test server seeded: real run is the latest run, demo + gap runs exist",
+  "ok": true,
+  "detail": "run-2026-10-08-daily"
+ },
+ {
+  "name": "real run has the 9 backfilled events from source coordinator-backfill",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "1920x1080: no horizontal page overflow, 7 towers, no clipped tower text",
+  "ok": true,
+  "detail": "{\"docX\": false, \"minFont\": 13.964021381578947, \"clipped\": [], \"towers\": 7, \"tinyText\": [], \"scale\": 0.9974300986842105, \"density\": \"full\"}"
+ },
+ {
+  "name": "1920x1080: graph text stays >= 12.4 px effective (density full, scale 1.00)",
+  "ok": true,
+  "detail": "min 14.0 []"
+ },
+ {
+  "name": "1920x1080: inspector is collapsed while nothing is selected (space goes to the graph)",
+  "ok": true,
+  "detail": "0"
+ },
+ {
+  "name": "1440x900: no horizontal page overflow, 7 towers, no clipped tower text",
+  "ok": true,
+  "detail": "{\"docX\": false, \"minFont\": 13.04296875, \"clipped\": [], \"towers\": 7, \"tinyText\": [], \"scale\": 0.931640625, \"density\": \"full\"}"
+ },
+ {
+  "name": "1440x900: graph text stays >= 12.4 px effective (density full, scale 0.93)",
+  "ok": true,
+  "detail": "min 13.0 []"
+ },
+ {
+  "name": "1440x900: inspector is collapsed while nothing is selected (space goes to the graph)",
+  "ok": true,
+  "detail": "0"
+ },
+ {
+  "name": "1280x720: no horizontal page overflow, 7 towers, no clipped tower text",
+  "ok": true,
+  "detail": "{\"docX\": false, \"minFont\": 15.156018518518518, \"clipped\": [], \"towers\": 7, \"tinyText\": [], \"scale\": 0.9971064814814815, \"density\": \"compact\"}"
+ },
+ {
+  "name": "1280x720: graph text stays >= 12.4 px effective (density compact, scale 1.00)",
+  "ok": true,
+  "detail": "min 15.2 []"
+ },
+ {
+  "name": "1280x720: inspector is collapsed while nothing is selected (space goes to the graph)",
+  "ok": true,
+  "detail": "0"
+ },
+ {
+  "name": "900x700: graph view is shown (list is the default only below 900px)",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "900x700: no horizontal page overflow, 7 towers, no clipped tower text",
+  "ok": true,
+  "detail": "{\"docX\": false, \"minFont\": 12.454193548387096, \"clipped\": [], \"towers\": 7, \"tinyText\": [], \"scale\": 0.8193548387096774, \"density\": \"compact\"}"
+ },
+ {
+  "name": "900x700: graph text stays >= 12.4 px effective (density compact, scale 0.82)",
+  "ok": true,
+  "detail": "min 12.5 []"
+ },
+ {
+  "name": "900x700: inspector is collapsed while nothing is selected (space goes to the graph)",
+  "ok": true,
+  "detail": "0"
+ },
+ {
+  "name": "data_ibkr: no events => looks inactive ('Not started', 'No agent running'), never active",
+  "ok": true,
+  "detail": "Stock-data specialist | Not started | No agent running | No events from this agent | Latest result\u2014"
+ },
+ {
+  "name": "strategy_researcher: no events => looks inactive ('Not started', 'No agent running'), never active",
+  "ok": true,
+  "detail": "Strategy researcher | Not started | No agent running | No events from this agent | Latest result\u2014"
+ },
+ {
+  "name": "risk_execution: no events => looks inactive ('Not started', 'No agent running'), never active",
+  "ok": true,
+  "detail": "Risk / Execution engineer | Not started | No agent running | No events from this agent | Latest result\u2014"
+ },
+ {
+  "name": "monitor: no events => looks inactive ('Not started', 'No agent running'), never active",
+  "ok": true,
+  "detail": "Monitoring | Not started | No agent running | No events from this agent | Latest result\u2014"
+ },
+ {
+  "name": "lead has events but never reported agent.status => 'No status reported', not Working",
+  "ok": true,
+  "detail": "Coordinator | No status reported | No task reported | No status event yet | Last 00:21:45 EDT | Queued 0 \u00b7 Done 0"
+ },
+ {
+  "name": "backtester tower: role, Complete badge, task, elapsed, last event, queued/done, result preview",
+  "ok": true,
+  "detail": "Backtester | Complete | Last task: H3 daily train/validation run | In status 1h 41m | Last 00:21:52 EDT | Queued 1 \u00b7 Done 1 | Test:PASS: pytest tests/test_daily_*.py (17 tests)"
+ },
+ {
+  "name": "validator tower shows Complete + audit task text from events",
+  "ok": true,
+  "detail": "Independent validator | Complete | Last task: Daily audit: 0 high, 1 medium, 7 low | In status 1h 41m | Last 00:21:45 EDT | Queued 0 \u00b7 Done 1 | Latest resultnone reported"
+ },
+ {
+  "name": "no fabricated percentages / token / cost numbers on towers or summary",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "real run is not labelled DEMO",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "client-side derivation matches /api/snapshot (status, task, completed count for all 7 agents)",
+  "ok": true,
+  "detail": "{\"lead\": null, \"data_ibkr\": null, \"strategy_researcher\": null, \"backtester\": \"complete\", \"validator\": \"complete\", \"risk_execution\": null, \"monitor\": null}"
+ },
+ {
+  "name": "clicking a tower opens the resizable inspector",
+  "ok": true,
+  "detail": "420"
+ },
+ {
+  "name": "inspector has the five tabs",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "inspector states private reasoning is not shown (once)",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "resize handle (separator) is present for the inspector",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "Outputs tab lists the artifact path, test result and offers Open document",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "artifact link opens the document from /api/docs/DAILY_RESULTS.md",
+  "ok": true,
+  "detail": "24005"
+ },
+ {
+  "name": "Esc closes the document drawer first",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "Messages tab shows the delegation from lead",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "Current task tab: no usage invented",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "View changes shows the git-tracked path as text (no git call)",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "selecting a tower filters the timeline to that agent",
+  "ok": true,
+  "detail": "6"
+ },
+ {
+  "name": "Esc collapses the inspector and returns focus to the tower",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "timeline unfiltered again after deselect",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "selecting an artifact event highlights its tower and the artifact preview",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "selecting a message event highlights sender and recipient towers",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "hierarchy lines exist for all six specialists",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "message connectors exist only for observed messages (lead|backtester, lead|validator)",
+  "ok": true,
+  "detail": "['backtester|lead', 'lead|validator']"
+ },
+ {
+  "name": "no connector pulses on load or for replayed backlog events",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "dependency connector absent: T-audit has no task.created, so its owner is unknown (never guessed)",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "before: no connector between validator and monitor",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "emit.py posted a real message.sent",
+  "ok": true,
+  "detail": "{\"ok\": true, \"accepted\": [{\"event_id\": \"0aff9bb3f807412fa11cfc7631249d94\", \"seq\": 49}], \"duplicates\": [], \"rejected\": []"
+ },
+ {
+  "name": "live message.sent pulses exactly that edge (and no other)",
+  "ok": true,
+  "detail": "['msg:monitor|validator']"
+ },
+ {
+  "name": "hover/focus shows sender, recipient, timestamp and preview",
+  "ok": true,
+  "detail": "validator to monitor, 02:02:53 EDT: Audit complete, 1 medium finding"
+ },
+ {
+  "name": "click opens details with sender, recipient, time and preview",
+  "ok": true,
+  "detail": "Message: monitor and validator | Sender | validator | Recipient | monitor | Time | 02:02:53 EDT | Preview | Audit complete, 1 medium finding | Kind | message | null | | This solid line exists because a message.sent event was recorded."
+ },
+ {
+  "name": "pulse stops by itself",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "dependency edge is dashed; message edge is solid; hierarchy is thin neutral (three visibly different kinds)",
+  "ok": true,
+  "detail": "{\"dep\": [\"7px, 5px\", \"rgb(233, 186, 102)\", \"2px\"], \"msg\": [\"none\", \"rgb(118, 167, 250)\", \"2.4px\"], \"hier\": [\"none\", \"color(srgb 0.603922 0.666667 0.741176 / 0.6)\", \"1.25px\"]}"
+ },
+ {
+  "name": "a dependency event does not pulse any connector",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "still no pulse after another task.dependency event",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "layout is stable: adding a connector does not move existing connectors",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "towers do not move when events arrive",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "heartbeat alone: 'service reachable' shown separately, status stays Not started (not Working)",
+  "ok": true,
+  "detail": "Risk / Execution engineer | Not started | No agent running | No events from this agent | Service reachable | Latest result\u2014"
+ },
+ {
+  "name": "arrow keys move focus between towers (lead -> specialist -> neighbour -> lead)",
+  "ok": true,
+  "detail": "('strategy_researcher', 'backtester', 'lead')"
+ },
+ {
+  "name": "Enter inspects the focused tower and moves focus into the inspector",
+  "ok": true,
+  "detail": "ag-ins-title"
+ },
+ {
+  "name": "Esc closes the inspector; focus returns to a tower",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "Tab reaches all seven towers in reading order",
+  "ok": true,
+  "detail": "['lead', 'data_ibkr', 'strategy_researcher', 'backtester', 'validator', 'risk_execution', 'monitor']"
+ },
+ {
+  "name": "search covers agents, tasks and events via /api/search",
+  "ok": true,
+  "detail": "Agents (0) | No matching agent | Tasks (1) | T-audit Independent audit of daily pipeline | Events (6) | task.dependency #51 run-2026-10-08-daily | T-audit waits on T-daily | task.created #50 run-2026-"
+ },
+ {
+  "name": "clicking an event result selects it (highlights towers)",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "search finds agents by role name",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "clicking an agent result opens its inspector",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "status filter dims non-matching towers (layout unchanged)",
+  "ok": true,
+  "detail": "['lead', 'data_ibkr', 'strategy_researcher', 'risk_execution', 'monitor']"
+ },
+ {
+  "name": "event-type filter limits the timeline",
+  "ok": true,
+  "detail": "['message.sent']"
+ },
+ {
+  "name": "role filter dims the other six towers",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "clear filters restores everything",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "zoom in/out and fit-to-screen change and restore the scale",
+  "ok": true,
+  "detail": "(0.931640625, 1.11796875, 0.7763671875, 0.931640625)"
+ },
+ {
+  "name": "centre-on-active-agent centres the active (working) tower",
+  "ok": true,
+  "detail": "[0.33203125, 0.109375]"
+ },
+ {
+  "name": "drag pans the stage",
+  "ok": true,
+  "detail": "translate(93px, 52px) scale(0.931641)"
+ },
+ {
+  "name": "Request update shows the server's actual reply ('recorded, no runtime attached')",
+  "ok": true,
+  "detail": "request update: recorded, no runtime attached: no update will be produced"
+ },
+ {
+  "name": "Start research task: server reply shown, states the task was NOT started",
+  "ok": true,
+  "detail": "Server response: recorded, no runtime attached: task NOT started; nothing will execute it until an agent runtime exists"
+ },
+ {
+  "name": "Cancel confirm states it only records a request to stop RESEARCH (no positions, orders, execution)",
+  "ok": true,
+  "detail": "Record a request to cancel research? | | Target: Strategy researcher. | | AFFECTS | This only records a request to stop RESEARCH work. It never closes positions, cancels orders or touches execution. No agent runtime is attached, so nothing is stopped either. | Keep as is | Record cancel request"
+ },
+ {
+  "name": "Cancel outcome is the server's reply",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "set_concurrency shows 'recorded, not enforced' honestly",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "commands were recorded by the server as command.recorded events",
+  "ok": true,
+  "detail": "['request_update', 'assign_task', 'cancel_research', 'set_concurrency']"
+ },
+ {
+  "name": "no order / execution endpoints were called",
+  "ok": true,
+  "detail": "[('POST', 'http://127.0.0.1:8812/api/prefs'), ('POST', 'http://127.0.0.1:8812/api/prefs'), ('POST', 'http://127.0.0.1:8812/api/prefs'), ('POST', 'http://127.0.0.1:8812/api/prefs'), ('POST', 'http://127.0.0.1:8812/api/prefs')]"
+ },
+ {
+  "name": "demo toggle labels everything DEMO (badge + banner + tower chips)",
+  "ok": true,
+  "detail": "DEMO DATA. Generated in this browser to show how the tower works. It is not real activity and is never stored or sent to the server. null"
+ },
+ {
+  "name": "demo data is client-side only: server event count unchanged",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "demo mode disables commands (nothing is sent)",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "exiting demo restores the real run",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "a backend run made only of source='demo' events is labelled DEMO",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "selecting an older run shows RECORDED RUN (not LIVE)",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "recorded run disables live commands with a reason",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "replay mode badge is distinct from live",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "replay shows a compressed-gap label ('gap compressed 14m')",
+  "ok": true,
+  "detail": "gap compressed 14m"
+ },
+ {
+  "name": "replay shows the labelled historical (original) timestamp",
+  "ok": true,
+  "detail": "Original time 2026-10-07 23:02:47 EDT"
+ },
+ {
+  "name": "pause stops the replay (button reads Play)",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "paused replay does not advance",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "play resumes the replay",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "scrubbing seeks to an event position and pauses",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "speed selector offers 0.5x to 16x",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "replayed message.sent pulses (uses recorded events only)",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "replay posts nothing (no POST requests while replaying)",
+  "ok": true,
+  "detail": "[]"
+ },
+ {
+  "name": "exit replay returns to the recorded run view",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "killing the server shows STALE honestly (banner explains, counters paused)",
+  "ok": true,
+  "detail": "Event stream is stale. Towers show the last known state as of 2026-10-08 02:03:15 EDT; elapsed counters are paused. null"
+ },
+ {
+  "name": "after reconnect the feed resumes with no duplicate events (rows == unique seqs == server events)",
+  "ok": true,
+  "detail": "(20, 20, 20)"
+ },
+ {
+  "name": "the post-restart message appears once and pulses its connector or at least exists",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "light theme: towers render without clipping",
+  "ok": true,
+  "detail": "[]"
+ },
+ {
+  "name": "800px: list view is the default",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "800px: accessible table lists all 7 agents with status, task, in-status, last event, queued, done, result",
+  "ok": true,
+  "detail": "(7, ['Agent', 'Status', 'Current task', 'In status', 'Last event', 'Queued', 'Done', 'Latest result', 'Service'])"
+ },
+ {
+  "name": "800px list shows the same honest states (Not started, Complete, No status reported)",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "800px: selecting a row opens the inspector as a drawer",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "800px: Esc closes the drawer",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "800px: graph view is available on demand",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "800px graph: no horizontal page overflow",
+  "ok": true,
+  "detail": "{\"docX\": false, \"minFont\": 12.16, \"clipped\": [], \"towers\": 7, \"tinyText\": [\"lead:badge badge-neutral:12.2\", \"lead:t-task is-empty:12.2\", \"lead:t-line t-counts:12.2\", \"data_ibkr:badge badge-neutral:12.2\", \"data_ibkr:t-task is-empty:12.2\", \"strategy_researcher:badge badge-neutral:12.2\", \"strategy_rese"
+ },
+ {
+  "name": "without an API token the action reports 'Not recorded' (no fake success)",
+  "ok": true,
+  "detail": "request update: Not recorded. API token not set. Enter it in the top bar (Token) to save changes."
+ },
+ {
+  "name": "800px context: no page errors",
+  "ok": true,
+  "detail": "[]"
+ },
+ {
+  "name": "no external requests were made",
+  "ok": true,
+  "detail": "[]"
+ },
+ {
+  "name": "no page errors or console errors (apart from the refused connections caused by the deliberate server kill)",
+  "ok": true,
+  "detail": "[]"
+ }
+]

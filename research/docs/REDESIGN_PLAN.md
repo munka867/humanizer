@@ -35,6 +35,12 @@ Change% is vs prior regular-session close. Daily bars only: no intraday interval
 (manifest has ids), not ticker alone. Demo data isolated and labelled (source='demo').
 
 ## Checklist (update as items become genuinely functional; link evidence)
-- [ ] 1 Audit + tokens + components  - [ ] 2 Shell, nav, top bar, Command Center  - [ ] 3 Stocks & Charts, watchlists, positions/orders tables
-- [ ] 4 Agent Team tower view + inspector  - [ ] 5 Research, experiments, results, data import  - [ ] 6 Risk/execution controls (no order path)
+- [ ] 1 Audit + tokens + components  - [ ] 2 Shell, nav, top bar, Command Center  - [x] 3 Stocks & Charts, watchlists, positions/orders tables, Command Center screen (MARKET; verified 2026-10-08: command_center/verify_market.py 42/42 on SYNTHETIC fixtures and on real local files, tests/test_cc_market*.py; screenshots/after/market-*.png)
+- [ ] 4 Agent Team tower view + inspector  - [x] 5 Research, experiments, results, data import (verified 2026-10-08: command_center/verify_research.py 55/55, tests/test_cc_research*.py; screenshots/after/research-*.png)  - [ ] 6 Risk/execution controls (no order path)
 - [ ] 7 Visual QA at 1920x1080, 1440x900, 1280x720 + responsive; before/after screenshots  - [ ] 8 Journeys + security review
+
+## Polish list (coordinator, from real-data screenshots 2026-10-08)
+1. Stocks & Charts opens on IWM; it should open on the first watchlist item (SPY) or the last-selected symbol (persisted).
+2. Command Center "Recent events": test.result rows show 'backtester:' with the test name missing; show name + outcome.
+3. Command Center right column is clipped at the bottom at 1440x900 (data freshness list cut off); make that panel scroll internally or compact it.
+4. Watchlist table in Stocks sits below the fold at 1440x900 (acceptable but consider a compact side placement).

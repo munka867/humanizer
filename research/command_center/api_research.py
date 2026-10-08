@@ -422,8 +422,8 @@ def normalise(summary: dict, variant: str, *, rid: str, source: dict, run: dict,
                    "inputs": vd.get("inputs"), "rule": "validation.verdict.classify_development as produced by the pipeline (docs/VALIDATION_PLAN.md section 5)",
                    "scope": "development verdict on train+validation; says nothing about the sealed test, and is not a profitability or readiness claim"}
     return {"schema": "cc.result.v1", "id": rid, "source": source,
-            "labels": ["conditional simulation" if evidence[key].get("monte_carlo") else "descriptive backtest",
-                       "SYNTHETIC data (software test only)" if run.get("synthetic_data") else "market data as listed in dataset"],
+            "labels": ["descriptive backtest" + (" + Monte Carlo (conditional simulation)" if evidence[key].get("monte_carlo") else ""),
+                       "SYNTHETIC data (software test only)" if run.get("synthetic_data") else "market data: IBKR connector daily bars"],
             "strategy": {"id": run.get("registry_id"), "pipeline_variant": variant, "pipeline_strategy_id": summary["variants"][variant].get("strategy_id")},
             "run": run, "metric_definitions": METRIC_DEFINITIONS, "evidence": evidence, "verdict": verdict,
             "caveats": CAVEATS}
@@ -520,3 +520,76 @@ def api_audit(h, m, q, body):
     for r in rows:
         r["detail"] = json.loads(r["detail"])
     return {"entries": rows}
+
+
+# ------------------------------------------------------------------ series / trade log (aggregates from the pipeline's CSV output)
+SERIES_DEFS = {
+    "net_pnl": "sum of net P&L (after modelled costs) of trades entered that New York date, USD",
+    "gross_pnl": "same before costs", "costs": "modelled round-trip costs of those trades (unverified assumptions)",
+    "n_trades": "trades entered that date", "equity": "cumulative net P&L since the start of the segment (USD, starts at 0; not an account balance)",
+    "drawdown": "equity minus its running maximum (including the starting 0), USD; closed-trade basis",
+}
+
+
+def _csv_rows(path: Path, variant: str) -> list[dict]:
+    import csv
+    with open(path, newline="", encoding="utf-8") as fh:
+        return [r for r in csv.DictReader(fh) if r.get("variant") == variant]
+
+
+def _run_files(c: Ctx, rid: str) -> tuple[Path, str, str, dict]:
+    """(directory with the CSVs, variant, segment, extra info) for an experiment id or committed id."""
+    if rid.startswith("committed:"):
+        mt = COMMITTED_RE.match(rid)
+        if not mt:
+            raise ApiError(404, "unknown committed run id")
+        seg, variant = mt.groups()
+        d = Path(c.paths["experiments_dir"]) / "committed_repro" / seg
+        info = {"origin": "reproduced with the pre-registered settings into results/experiments/committed_repro (not the committed files themselves)"}
+        chk = Path(c.paths["experiments_dir"]) / "committed_repro" / "REPRO_CHECK.json"
+        try:
+            rep = json.loads(chk.read_text())
+            info["reproduction_equals_committed_summary"] = rep["segments"][seg]["equal"]
+        except (OSError, ValueError, KeyError):
+            info["reproduction_equals_committed_summary"] = None
+        if not (d / "daily_series.csv").is_file():
+            raise ApiError(404, "series not generated yet; run `python -m command_center.repro_committed` (reproduces and verifies the committed runs)",
+                           code="series_not_generated")
+        return d, variant, seg, info
+    job = _get_exp(c, rid)
+    if job["status"] != "completed":
+        raise ApiError(409, f"experiment is {job['status']}; no series", job_status=job["status"])
+    d = get_queue(c).out_dir_abs(job["id"])
+    if not (d / "daily_series.csv").is_file():
+        raise ApiError(404, "this run has no series file (it predates series output)")
+    return d, job["params"]["pipeline_variant"], job["params"]["segment"], {}
+
+
+@route("GET", r"/api/(?:experiments/(exp_[A-Za-z0-9_]+)|runs/committed/(committed:[A-Za-z0-9_:]+))/series")
+@handler
+def api_series(h, m, q, body):
+    c = ctx(h.server)
+    d, variant, seg, info = _run_files(c, m.group(1) or m.group(2))
+    rows = _csv_rows(d / "daily_series.csv", variant)
+    cols = ["date", "net_pnl", "gross_pnl", "costs", "n_trades", "equity", "drawdown"]
+    out = [[r["date"]] + [float(r[k]) if k != "n_trades" else int(r[k]) for k in cols[1:]] for r in rows]
+    return {"id": m.group(1) or m.group(2), "segment": seg, "variant": variant, "columns": cols, "rows": out, "definitions": SERIES_DEFS,
+            "label": "per-trading-day aggregates of the segment's trades; not prices; not an account balance", **info}
+
+
+@route("GET", r"/api/(?:experiments/(exp_[A-Za-z0-9_]+)|runs/committed/(committed:[A-Za-z0-9_:]+))/trades")
+@handler
+def api_trades(h, m, q, body):
+    c = ctx(h.server)
+    d, variant, seg, info = _run_files(c, m.group(1) or m.group(2))
+    try:
+        off, lim = max(0, int(q.get("offset", 0))), max(1, min(int(q.get("limit", 100)), 500))
+    except ValueError:
+        raise ApiError(400, "offset/limit must be integers")
+    rows = _csv_rows(d / "trades.csv", variant)
+    cols = ["trade_id", "symbol", "side", "entry_date", "exit_date", "qty", "entry_px", "exit_px", "pnl_gross", "costs", "pnl_net", "r_multiple"]
+    page = [{k: (r[k] if k in ("symbol", "entry_date", "exit_date") else float(r[k])) for k in cols} for r in rows[off:off + lim]]
+    for r in page:
+        r["side"] = "short" if r["side"] < 0 else "long"
+    return {"id": m.group(1) or m.group(2), "segment": seg, "total": len(rows), "offset": off, "limit": lim, "trades": page,
+            "note": "side: long/short; prices are the daily open (entry) and close (exit) of the traded bar; r_multiple uses ATR14 risk_usd (no stop exists)"}

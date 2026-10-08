@@ -222,7 +222,7 @@ def main():
             shot("inspector-open")
             page.keyboard.press("Escape"); page.wait_for_timeout(500)
             check("Esc collapses the inspector and returns focus to the tower", page.evaluate("document.querySelector('.ag-inspector').getBoundingClientRect().width") < 2 and page.evaluate("document.activeElement && document.activeElement.dataset && document.activeElement.dataset.agent") == "backtester")
-            check("timeline unfiltered again after deselect", page.locator(".ag-timeline tr.tbl-row").count() == 9)
+            check("timeline unfiltered again after deselect", page.locator(".ag-timeline tr.tbl-row").count() == len(api("GET", f"/api/events?run_id={REAL_RUN}&limit=500")[1]["events"]))
 
             # ------------------------------------------------------------ selecting an event highlights tower + artifact
             page.click('.ag-timeline tr.tbl-row:has-text("artifact.created")'); page.wait_for_timeout(300)

@@ -102,12 +102,12 @@
  {
   "name": "backtester tower: role, Complete badge, task, elapsed, last event, queued/done, result preview",
   "ok": true,
-  "detail": "Backtester | Complete | Last task: H3 daily train/validation run | In status 1h 45m | Last 00:21:52 EDT | Queued 1 \u00b7 Done 1 | Test:PASS: pytest tests/test_daily_*.py (17 tests)"
+  "detail": "Backtester | Complete | Last task: H3 daily train/validation run | In status 1h 48m | Last 00:21:52 EDT | Queued 1 \u00b7 Done 1 | Test:PASS: pytest tests/test_daily_*.py (17 tests)"
  },
  {
   "name": "validator tower shows Complete + audit task text from events",
   "ok": true,
-  "detail": "Independent validator | Complete | Last task: Daily audit: 0 high, 1 medium, 7 low | In status 1h 45m | Last 00:21:45 EDT | Queued 0 \u00b7 Done 1 | Latest resultnone reported"
+  "detail": "Independent validator | Complete | Last task: Daily audit: 0 high, 1 medium, 7 low | In status 1h 48m | Last 00:21:45 EDT | Queued 0 \u00b7 Done 1 | Latest resultnone reported"
  },
  {
   "name": "no fabricated percentages / token / cost numbers on towers or summary",
@@ -170,6 +170,21 @@
   "detail": ""
  },
  {
+  "name": "Tool activity tab lists tool.activity events (tool + summary)",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "Run history tab lists this agent's events (status transitions, results)",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "Review result opens the latest result (test) in a panel",
+  "ok": true,
+  "detail": ""
+ },
+ {
   "name": "View changes shows the git-tracked path as text (no git call)",
   "ok": true,
   "detail": ""
@@ -177,7 +192,7 @@
  {
   "name": "selecting a tower filters the timeline to that agent",
   "ok": true,
-  "detail": "6"
+  "detail": "7"
  },
  {
   "name": "Esc collapses the inspector and returns focus to the tower",
@@ -227,7 +242,7 @@
  {
   "name": "emit.py posted a real message.sent",
   "ok": true,
-  "detail": "{\"ok\": true, \"accepted\": [{\"event_id\": \"8813acc53f0347bc965a635d47306884\", \"seq\": 49}], \"duplicates\": [], \"rejected\": []"
+  "detail": "{\"ok\": true, \"accepted\": [{\"event_id\": \"a015c6887bd844d4bed7fc52bb1fb466\", \"seq\": 50}], \"duplicates\": [], \"rejected\": []"
  },
  {
   "name": "live message.sent pulses exactly that edge (and no other)",
@@ -237,12 +252,12 @@
  {
   "name": "hover/focus shows sender, recipient, timestamp and preview",
   "ok": true,
-  "detail": "validator to monitor, 02:07:46 EDT: Audit complete, 1 medium finding"
+  "detail": "validator to monitor, 02:10:21 EDT: Audit complete, 1 medium finding"
  },
  {
   "name": "click opens details with sender, recipient, time and preview",
   "ok": true,
-  "detail": "Message: monitor and validator | Sender | validator | Recipient | monitor | Time | 02:07:46 EDT | Preview | Audit complete, 1 medium finding | Kind | message | null | | This solid line exists because a message.sent event was recorded."
+  "detail": "Message: monitor and validator | Sender | validator | Recipient | monitor | Time | 02:10:21 EDT | Preview | Audit complete, 1 medium finding | Kind | message | null | | This solid line exists because a message.sent event was recorded."
  },
  {
   "name": "pulse stops by itself",
@@ -275,6 +290,16 @@
   "detail": ""
  },
  {
+  "name": "task board has columns by status; T-daily sits in Queued (its only task event)",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "dependency list shows T-audit waits on T-daily with owners and the connector state",
+  "ok": true,
+  "detail": "Task dependencies | Task | | Owner | | Waits on | | Provider | | State | | Connector | | T-audit \u00b7 Independent audit of daily pipeline Validator T-daily \u00b7 H3 daily backtest (DAILY_SPEC v1)"
+ },
+ {
   "name": "heartbeat alone: 'service reachable' shown separately, status stays Not started (not Working)",
   "ok": true,
   "detail": "Risk / Execution engineer | Not started | No agent running | No events from this agent | Service reachable | Latest result\u2014"
@@ -302,7 +327,7 @@
  {
   "name": "search covers agents, tasks and events via /api/search",
   "ok": true,
-  "detail": "Agents (0) | No matching agent | Tasks (1) | T-audit Independent audit of daily pipeline | Events (6) | task.dependency #51 run-2026-10-08-daily | T-audit waits on T-daily | task.created #50 run-2026-"
+  "detail": "Agents (0) | No matching agent | Tasks (1) | T-audit Independent audit of daily pipeline | Events (6) | task.dependency #52 run-2026-10-08-daily | T-audit waits on T-daily | task.created #51 run-2026-"
  },
  {
   "name": "clicking an event result selects it (highlights towers)",
@@ -437,7 +462,7 @@
  {
   "name": "replay shows the labelled historical (original) timestamp",
   "ok": true,
-  "detail": "Original time 2026-10-07 23:07:40 EDT"
+  "detail": "Original time 2026-10-07 23:10:13 EDT"
  },
  {
   "name": "pause stops the replay (button reads Play)",
@@ -482,12 +507,12 @@
  {
   "name": "killing the server shows STALE honestly (banner explains, counters paused)",
   "ok": true,
-  "detail": "Event stream is stale. Towers show the last known state as of 2026-10-08 02:08:08 EDT; elapsed counters are paused."
+  "detail": "Event stream is stale. Towers show the last known state as of 2026-10-08 02:10:41 EDT; elapsed counters are paused."
  },
  {
   "name": "after reconnect the feed resumes with no duplicate events (rows == unique seqs == server events)",
   "ok": true,
-  "detail": "(20, 20, 20)"
+  "detail": "(21, 21, 21)"
  },
  {
   "name": "the post-restart message appears once and pulses its connector or at least exists",
@@ -541,6 +566,11 @@
  },
  {
   "name": "800px context: no page errors",
+  "ok": true,
+  "detail": "[]"
+ },
+ {
+  "name": "dev harness (?ws=agents&live=1) mounts the workspace with 7 towers and no errors",
   "ok": true,
   "detail": "[]"
  },

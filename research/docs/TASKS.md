@@ -10,7 +10,7 @@ Slice 7 Paper connection ............... [ ] BLOCKED B2 (paper account credentia
 Slice 8 Live-capable release (inactive)  [ ] only after the above + user approval of exact account/instrument/strategy/policy
 
 Blockers needing the user
-- B1 Provide an Activity Flex and/or Trade Confirmation export (CSV/XML) or approve a specific account read.
+- B1 (updated 2026-10-08: connector account is empty/zero, identity unconfirmed) Provide an Activity Flex and/or Trade Confirmation export (CSV/XML) or approve a specific account read.
 - B2 Paper account details/credentials server-side only (never in chat/prompts); confirm API-order eligibility with IBKR Canada.
 - B3 Intraday history source (see DATA_REQUEST.md) if intraday strategies are to be tested.
 Acceptance tests still unwritten: see the prompt's list; track each here when implemented.

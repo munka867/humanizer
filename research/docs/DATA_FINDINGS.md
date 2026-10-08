@@ -28,3 +28,11 @@ Conclusions
 - Quality: no duplicates, zero-volume bars, or large gaps. 15 SPY / 4 QQQ / 7 IWM bars have close outside the
   reported high/low by 0.01-2.8 (closing-auction prints). Largest daily move 2025-04-09 (SPY +10.5% close-to-close).
   Prices are 'Last', unadjusted for dividends, feed delayed ~15 min.
+
+## Account read, 2026-10-08 (read-only, user authorised; no live trading permission)
+Connector queries: trades YTD + each of the last four quarters, positions, summary, balances, open orders. Result: ALL EMPTY/ZERO
+(no trades, no positions, no open orders, net liquidation 0, base currency CAD). Nothing was saved (nothing to save).
+Open question for the user: the connector does not return an account id here, so I cannot confirm WHICH account this is
+(a funded live account would not normally be zero). Per the identity rule, account identity must be confirmed from broker
+responses before any paper/live work; until then treat the account state as unknown. The data-import slice therefore still
+has no real account sample (BLOCKED B1 stands; Flex export or a funded/paper account needed).

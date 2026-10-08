@@ -1,0 +1,16 @@
+# DAILY_SPEC v1 (pre-registered 2026-10-08). No free parameters; nothing here may be tuned.
+spec: DAILY_SPEC_v1
+universe: [SPY, QQQ, IWM]
+data_dir: data/processed        # {SYMBOL}_1d.csv, git-ignored
+notional_usd: 10000.0           # ASSUMPTION (spec)
+atr_n: 14                       # ATR14 on H*,L*,close; simple mean of true range (spec does not say Wilder)
+max_gap_calendar_days: 4        # no signal if next bar is > 4 calendar days after day t
+variants:
+  D3_V1_c2_both:  {sides: both}
+  D3_V2_c2_long:  {sides: long}
+  D3_V3_c2_short: {sides: short}
+split: {fractions: [0.6, 0.2, 0.2], purge_days: 3}
+seeds: {baseline: 20261008, bootstrap: 20261008, montecarlo: 20261008}
+b_d1_draws: 10000
+mc: {method: day_block, n_sims: 5000, account_size: 10000.0}
+n_variants_registered_overall: 16   # 13 intraday + 3 daily (EXPERIMENT_LOG)

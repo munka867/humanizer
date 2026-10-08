@@ -1,0 +1,12 @@
+# Cost ASSUMPTIONS for SPY/QQQ/IWM daily open->close trades (DAILY_SPEC "Sizing / costs").
+# NONE of these numbers is a verified fee fact. TODO(verify) against the current IBKR Canada schedule.
+# Not modelled (flagged): SEC/FINRA sell-side fees, CAD<->USD FX conversion, dividends, half-day early closes.
+base:
+  commission_per_order_usd: 0.35        # ASSUMPTION: per-order minimum; a round trip is 2 orders
+  half_spread_usd_per_share_per_side: 0.005   # ASSUMPTION: 0.5 cent per share per side
+  slippage_bps_open: 1.0                # ASSUMPTION: adverse bps of notional at the open fill
+  slippage_bps_close: 0.5               # ASSUMPTION: adverse bps of notional at the close fill
+scenarios:                              # multiplier applied to ALL components above
+  x1: 1.0
+  x1_5: 1.5
+  x2: 2.0

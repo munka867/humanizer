@@ -24,3 +24,7 @@ Every variant is registered here BEFORE its results are read. Failed candidates 
 | D3-V3 | 2026-10-08 | H3 short-only | none | same | REGISTERED, NOT RUN | |
 | D3-B0 | 2026-10-08 | baselines B_D0 buy&hold O->C, B_D1 matched random-day permutation | seed 20261008 | same | REGISTERED, NOT RUN | |
 Variants registered so far: 13 intraday + 3 daily = 16 of 24 budget.
+| D3-V1 result | 2026-10-08 | train+validation run (DAILY_RESULTS.md), test sealed | none | train 2022-10-12..2025-03-04, val ..2025-12-20 | RUN (train, validation) | train EV -$5.32/trade n=471; val EV +$1.91 n=152 CI [-26.6,29.5]; verdict REJECTED (train EV<=0) |
+| D3-V2 result | 2026-10-08 | same | none | same | RUN (train, validation) | train EV -$18.43 n=236; val -$4.76 n=76; verdict REJECTED |
+| D3-V3 result | 2026-10-08 | same | none | same | RUN (train, validation) | train +$7.84 n=235 (B_D1 p=0.022); val +$8.57 n=76 CI [-43.4,53.5], B_D1 p=0.082; verdict INCONCLUSIVE |
+| D3-B0 result | 2026-10-08 | baselines | seed 20261008 | same | RUN (train, validation) | B_D0 pooled EV -$1.51 (train), +$4.86 (val) per $10k trade; B_D1 in DAILY_RESULTS.md |

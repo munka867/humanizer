@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Research Command Centre</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<a class="skip" href="#view">Skip to content</a>
+<header id="top">
+  <div class="brand">Research Command Centre <span class="muted">· research / simulation only</span></div>
+  <div class="hdr-right">
+    <span id="mode-badge" class="badge mode" role="status" aria-label="Current mode">MODE: …</span>
+    <span id="conn" class="badge conn connecting" role="status">○ CONNECTING</span>
+    <label class="inline">Run <select id="run-select" aria-label="Run selector"></select></label>
+    <label class="inline">Token <input id="token" type="password" autocomplete="off" placeholder="X-CC-Token" aria-label="X-CC-Token for commands"></label>
+  </div>
+</header>
+<div id="banner-demo" class="banner demo" hidden role="note"><strong>DEMO DATA</strong> — events on screen include source='demo'. They are seeded examples, not real agent activity, trades, results or test passes.</div>
+<div id="banner-stale" class="banner stale" hidden role="alert"></div>
+<div id="modebar" class="modebar" aria-label="Mode selection"></div>
+<div class="layout">
+  <nav id="nav" aria-label="Screens"></nav>
+  <main id="view" tabindex="-1"></main>
+</div>
+<div id="live" class="sr-only" aria-live="polite"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

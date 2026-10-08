@@ -13,8 +13,11 @@ Do not optimise for an impressive backtest.
   must be labelled `SYNTHETIC` in filename and metadata, and is used ONLY to test software.
 - YouTube channels (@deltatrendtrading, @TTrades_edu) are hypothesis sources. Transcripts are read via the
   Firecrawl youtube/read capability (no charts/visuals). Record exactly what was accessed in docs/SOURCES.md.
-- IBKR connector: user authorised READ-ONLY MARKET DATA only (2026-10-06). Never read account balances,
-  positions, orders or trades; never call create_order_instruction, alerts or watchlist tools.
+- IBKR connector (user authorisation, updated 2026-10-08): READ-ONLY account and market data are allowed; the connected
+  account is a brand-new, empty account. PAPER trading is allowed in principle but only through an approved broker
+  adapter + deterministic risk engine that do not exist yet; the connector's order-instruction tool must not be used.
+  LIVE trading is NOT allowed. Never call create_order_instruction, alerts or watchlist-writing tools. Keep account data
+  out of git and out of public docs.
 - Only information available at the decision time may be used (no look-ahead). Conservative intrabar fills:
   if stop and target are both touched in one bar, assume the STOP filled first.
 - Chronological train / validation / final-test split. Purge so trades cannot straddle boundaries.

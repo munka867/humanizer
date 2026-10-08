@@ -16,6 +16,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 from .derive import STALE_AFTER_S, snapshot
 from .schemas import BLOCKED_MODES, ROLES, SELECTABLE_MODES, ValidationError, utc_now_iso, validate_event
 from .store import Store
+from . import router
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
@@ -26,7 +27,8 @@ SSE_POLL_S = 0.25
 SSE_PING_S = 5.0
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 MIME = {".html": "text/html; charset=utf-8", ".js": "application/javascript; charset=utf-8",
-        ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml"}
+        ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".json": "application/json", ".md": "text/plain; charset=utf-8",
+        ".png": "image/png", ".woff2": "font/woff2"}
 NOT_ATTACHED = "recorded, no runtime attached"
 CANCEL_NOTE = "Cancel research is only a recorded request. It never touches positions or protective orders."
 
@@ -147,6 +149,9 @@ class Handler(BaseHTTPRequestHandler):
                 if not f.is_file():
                     return self._err(404, "not found")
                 return self._send(200, f.read_text(encoding="utf-8", errors="replace").encode(), "text/plain; charset=utf-8")
+            fn, mt = router.find("GET", p)
+            if fn:
+                return fn(self, mt, q, None)
             return self._err(404, "not found")
         except (ValueError, ValidationError) as e:
             return self._err(400, str(e))
@@ -155,12 +160,15 @@ class Handler(BaseHTTPRequestHandler):
         if not self._local_ok():
             return self._err(403, "local requests only")
         p = urlparse(self.path).path
-        if p not in ("/api/events", "/api/commands"):
+        if p not in ("/api/events", "/api/commands") and not router.has_post(p):
             return self._err(404, "not found")
         if not self._token_ok():
             return self._err(401, "missing or invalid X-CC-Token")
         try:
             body = self._body()
+            fn, mt = router.find("POST", p)
+            if fn:
+                return fn(self, mt, {}, body)
             if p == "/api/events":
                 return self._post_events(body)
             return self._post_command(body)
@@ -308,6 +316,7 @@ def default_db() -> str:
 
 
 def make_server(db_path, host="127.0.0.1", port=8765, token=None, **kw) -> CCServer:
+    router.load_modules()
     return CCServer((host, port), Store(db_path), token or secrets.token_urlsafe(16), **kw)
 
 

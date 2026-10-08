@@ -1,0 +1,34 @@
+/* Design tokens (single source of truth). Dark is the default theme. Contrast must be re-checked if values change. */
+:root, :root[data-theme="dark"] {
+  --bg: #0B1017;          /* app background */
+  --surface: #121A24;     /* primary surface */
+  --raised: #192331;      /* raised surface */
+  --border: #2A3748;
+  --text: #E8EEF6;        /* primary text */
+  --text-2: #9AAABD;      /* secondary text */
+  --accent: #76A7FA;      /* active agent work / selection / focus */
+  --pos: #46C796;         /* financial direction: gain */
+  --neg: #F27783;         /* financial direction: loss / risk breach */
+  --warn: #E9BA66;        /* attention / stale / pending */
+  --demo: #C9A2F2;        /* DEMO labelling only */
+  --focus: #9CC0FF;
+  --shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 2px 8px rgba(0,0,0,.35);
+  --font-sans: Inter, "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  /* type scale */
+  --fs-body: 14px; --fs-secondary: 12.5px; --fs-label: 12px; --fs-key: 26px; --fs-title: 18px;
+  /* spacing: 4/8px scale */
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px;
+  --r-sm: 8px; --r-md: 10px; --r-lg: 12px;
+  --h-control: 32px; --h-topbar: 56px; --w-nav: 232px; --w-nav-collapsed: 64px;
+  --dur: 140ms;
+}
+:root[data-theme="light"] {
+  --bg: #F3F6FA; --surface: #FFFFFF; --raised: #EEF2F7; --border: #CBD5E1; --text: #101826; --text-2: #4A5A6E;
+  --accent: #1F5FD6; --pos: #0F7A56; --neg: #B3261E; --warn: #8A5A00; --demo: #6E3FB5; --focus: #1F5FD6;
+  --shadow: 0 1px 2px rgba(16,24,38,.12);
+}
+@media (prefers-reduced-motion: reduce) { :root { --dur: 0ms; } *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; } }
+.num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; text-align: right; }
+.mono { font-family: var(--font-mono); }
+.pos { color: var(--pos); } .neg { color: var(--neg); }

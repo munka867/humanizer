@@ -18,3 +18,13 @@ Conclusions
 3. Tool output arrives in the chat, not on disk, so large pulls would have to be re-typed by an agent (costly,
    error-prone, and not reproducible). Not attempted.
 4. Nothing was backtested on connector data. No result exists.
+
+## Update 2026-10-08: daily bars work
+- Tool results above the size limit are saved to disk by the harness (no retyping). get_price_history(step_count=1000,
+  ONE_DAY) returned 1000 bars for SPY (ARCA), 999 for QQQ (NASDAQ) and IWM (ARCA): 2022-10-12/13 .. 2026-10-07.
+- Ingested via src/tradelab/data/ibkr_connector.py; raw JSON kept locally in data/raw/ibkr_connector (git-ignored,
+  market-data licensing / unknown repo visibility); MANIFEST.json (sha256, ids, retrieval date) IS committed.
+  The container is ephemeral: raw files are lost when it is reclaimed. A re-pull returns a shifted window.
+- Quality: no duplicates, zero-volume bars, or large gaps. 15 SPY / 4 QQQ / 7 IWM bars have close outside the
+  reported high/low by 0.01-2.8 (closing-auction prints). Largest daily move 2025-04-09 (SPY +10.5% close-to-close).
+  Prices are 'Last', unadjusted for dividends, feed delayed ~15 min.

@@ -2,5 +2,9 @@ __pycache__/
 *.pyc
 .pytest_cache/
 data/raw/*
+!data/raw/ibkr_connector/
+!data/raw/ibkr_connector/MANIFEST.json
+data/raw/ibkr_connector/*.json
+!data/raw/ibkr_connector/MANIFEST.json
 !data/raw/.gitkeep
 data/processed/

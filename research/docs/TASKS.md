@@ -1,6 +1,6 @@
 # Resumable checklist (update as work completes; link evidence)
 Slice 1 Inventory & preserve .......... [x] PROJECT_INVENTORY, DECISIONS, this file, RESEARCH_INDEX
-Slice 2 Durable events + dashboard ..... [~] built; coordinator verified 32 tests, live page, token refusal, real events. Open: dark theme (spec says dark neutral; was light), completed-count showed 0 (fix requested); other screens are honest stubs; no agent runtime/SDK attached; Claude Code team peer messages not observable (only emit.py events)
+Slice 2 Durable events + dashboard ..... [x] built; coordinator-verified: 33 tests, live dark-theme page, token refusal, real events, completed-count fix. Known gaps: Lead tower says 'no events yet' when it only sent messages (label keys off status events); other screens are honest stubs; no agent runtime/SDK; Claude Code team peer messages not observable (emit.py only)
 Slice 3 IBKR import + dictionary ....... [ ] BLOCKED B1 (need Flex sample) — build parsers against user-provided files only
 Slice 4 One strategy end-to-end ........ [x] H3 daily: implemented, reviewed, V1 REJECTED on train/val; sealed test intentionally unspent (docs/DAILY_RESULTS.md, REVIEW.md)
           open items: fix D-04 (split label of last bar), D-05 (strategy id vs log id), D-08 (freeze hash should cover code+data SHA)

@@ -1,12 +1,13 @@
 :root{
-  --bg:#14161a; --panel:#1b1e24; --panel2:#22262d; --line:#323843; --text:#e3e6ea; --muted:#9aa3af;
-  --accent:#8ab4f8; --ok:#7fbf8f; --work:#8ab4f8; --wait:#d9b36a; --appr:#c39ae0; --fail:#e07a7a; --idle:#8d96a3; --none:#5c6470;
-  --demo:#e0b04a; --focus:#ffd479;
+  color-scheme:dark;
+  --bg:#14161a; --panel:#1b1e24; --panel2:#22262d; --line:#3a414d; --text:#e3e6ea; --muted:#a3abb7; --accent:#8ab4f8; --ok:#7fbf8f; --work:#8ab4f8; --wait:#d9b36a; --appr:#c39ae0; --fail:#e88a8a; --idle:#a3abb7; --none:#a3abb7;
+  --demo:#e0b04a; --focus:#ffd479; --stale-bg:#a62b2b;
 }
-:root[data-theme="light"]{--bg:#f4f5f7;--panel:#fff;--panel2:#eceef1;--line:#c9cfd8;--text:#1b1f24;--muted:#5a6370;--accent:#1a56b0;
-  --ok:#2c7a43;--work:#1a56b0;--wait:#8a6212;--appr:#7a3fa0;--fail:#b02a2a;--idle:#5a6370;--none:#8a919c;--demo:#8a5a00;--focus:#a15c00}
-@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){--bg:#f4f5f7;--panel:#fff;--panel2:#eceef1;--line:#c9cfd8;--text:#1b1f24;--muted:#5a6370;--accent:#1a56b0;
-  --ok:#2c7a43;--work:#1a56b0;--wait:#8a6212;--appr:#7a3fa0;--fail:#b02a2a;--idle:#5a6370;--none:#8a919c;--demo:#8a5a00;--focus:#a15c00}}
+:root[data-theme="light"]{color-scheme:light;--bg:#f4f5f7;--panel:#fff;--panel2:#eceef1;--line:#8b94a1;--text:#1b1f24;--muted:#505967;--accent:#1a56b0;
+  --ok:#2c7a43;--work:#1a56b0;--wait:#7d5710;--appr:#7a3fa0;--fail:#b02a2a;--idle:#505967;--none:#505967;--demo:#7a4f00;--focus:#a15c00;--stale-bg:#b02a2a}
+/* secondary option: follow the OS only when the user picks "system" with the theme toggle */
+@media (prefers-color-scheme: light){:root[data-theme="system"]{color-scheme:light;--bg:#f4f5f7;--panel:#fff;--panel2:#eceef1;--line:#8b94a1;--text:#1b1f24;--muted:#505967;--accent:#1a56b0;
+  --ok:#2c7a43;--work:#1a56b0;--wait:#7d5710;--appr:#7a3fa0;--fail:#b02a2a;--idle:#505967;--none:#505967;--demo:#7a4f00;--focus:#a15c00;--stale-bg:#b02a2a}}
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 .muted{color:var(--muted)} .mono,code,pre{font-family:ui-monospace,Menlo,Consolas,monospace}
@@ -23,11 +24,12 @@ button[aria-disabled="true"],button:disabled{opacity:.6;cursor:not-allowed;borde
 .badge{display:inline-block;padding:3px 9px;border-radius:12px;border:1px solid var(--line);font-weight:600;letter-spacing:.03em;font-size:12px}
 .badge.mode{border-color:var(--accent);color:var(--accent)}
 .badge.conn.live{color:var(--ok);border-color:var(--ok)} .badge.conn.connecting,.badge.conn.reconnecting{color:var(--wait);border-color:var(--wait)}
-.badge.conn.stale{color:#fff;background:var(--fail);border-color:var(--fail)}
+.badge.conn.stale{color:#fff;background:var(--stale-bg);border-color:var(--stale-bg)}
 .banner{padding:8px 16px;font-weight:500;border-bottom:1px solid var(--line)}
 .banner.demo{background:repeating-linear-gradient(45deg,#3a2f12,#3a2f12 12px,#2d2410 12px,#2d2410 24px);color:#ffd88a;border-color:var(--demo);font-size:15px}
 :root[data-theme="light"] .banner.demo{background:#fff1cf;color:#5a3d00}
-.banner.stale{background:var(--fail);color:#fff;font-size:15px;font-weight:700}
+@media (prefers-color-scheme: light){:root[data-theme="system"] .banner.demo{background:#fff1cf;color:#5a3d00}}
+.banner.stale{background:var(--stale-bg);color:#fff;font-size:15px;font-weight:700}
 body.stale main,body.stale nav{filter:grayscale(1) opacity(.7)}
 body.stale main button,body.stale main input,body.stale main select{pointer-events:none}
 .modebar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
@@ -86,3 +88,5 @@ table{border-collapse:collapse;width:100%} th,td{border-bottom:1px solid var(--l
 .formrow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:6px 0}
 .result{margin-top:6px;padding:6px 8px;border-radius:4px;background:var(--panel2);font-size:12.5px}
 a{color:var(--accent)}
+
+.themebtn{min-width:5.5em}

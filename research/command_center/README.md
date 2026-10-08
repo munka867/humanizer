@@ -51,10 +51,11 @@ Types and required payload fields (v1): `agent.status{status}` (+optional `task,
 `incident{severity,summary}`, `mode.changed{mode}`, `approval.requested{approval_id,summary}`, `approval.resolved{approval_id,resolution}`,
 `heartbeat`, `command.recorded{command,accepted,runtime_attached,message}`.
 Dependencies (`task.dependency`, dashed edges) are deliberately distinct from messages (`message.sent`, solid edges that pulse).
+Completed-task count rule (`completed_count`): distinct tasks owned by the agent whose status is `complete` (from `task.created`/`task.updated`), plus each `agent.status` transition into `complete` whose task text is not already a counted task title (deduped by task text; a transition with no task text counts once).
 Usage/tokens are shown **only** if an `agent.status` event carried `usage`; no percentage completion or cost is ever computed.
 
 ### UI behaviour
-Persistent mode badge + mode bar (DEMO/BACKTEST/REPLAY selectable; SHADOW/PAPER/LIVE disabled with reasons); DEMO banner and per-item DEMO tags whenever
+Dark neutral theme by default (WCAG AA text/status contrast, status never colour-only: icon + text + border style); theme toggle cycles dark / light / system (system follows the OS only when chosen). Persistent mode badge + mode bar (DEMO/BACKTEST/REPLAY selectable; SHADOW/PAPER/LIVE disabled with reasons); DEMO banner and per-item DEMO tags whenever
 displayed data has `source='demo'`; connection badge connecting/live/reconnecting/STALE (no ping/event for 15s -> "STALE: showing last known state as of HH:MM:SS",
 UI greyed and inputs disabled); refresh = `/api/snapshot` + `/api/events` replay, then SSE from the highest seq (client dedupes by seq);
 edges animate only when a real `message.sent` arrives live or during replay; reduced-motion disables travelling dots;

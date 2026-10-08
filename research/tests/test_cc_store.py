@@ -153,3 +153,21 @@ def test_no_broker_imports():
     for f in (CC / "static").glob("*.js"):
         txt = f.read_text()
         assert "https://" not in txt.replace("https?://", "") and "cdn" not in txt.lower()
+
+
+def test_completed_count_rule(tmp_path):
+    s = Store(tmp_path / "e.db")
+    mk = lambda i, t, **kw: {"event_id": i, "event_type": t, "source": "t", "run_id": "r", **kw}
+    s.insert([
+        mk("1", "task.created", payload={"task_id": "A", "title": "do A", "owner": "backtester"}),
+        mk("2", "task.updated", agent_id="backtester", payload={"task_id": "A", "status": "complete"}),
+        # same work reported again through agent.status -> not double counted
+        mk("3", "agent.status", agent_id="backtester", payload={"status": "complete", "task": "do A"}),
+        # complete via agent.status only (no task events), twice for the same text -> counts once
+        mk("4", "agent.status", agent_id="validator", payload={"status": "complete", "task": "check B"}),
+        mk("5", "agent.status", agent_id="validator", payload={"status": "working", "task": "check C"}),
+        mk("6", "agent.status", agent_id="validator", payload={"status": "complete", "task": "check B"}),
+        mk("7", "agent.status", agent_id="monitor", payload={"status": "complete"}),
+    ])
+    ag = {a["agent_id"]: a["completed_count"] for a in derive.snapshot(s.events(run_id="r"), "r", 7)["agents"]}
+    assert ag["backtester"] == 1 and ag["validator"] == 1 and ag["monitor"] == 1 and ag["lead"] == 0

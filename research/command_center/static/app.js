@@ -513,6 +513,9 @@ async function viewAudit(v) {
 /* ---------------- boot ---------------- */
 document.addEventListener("DOMContentLoaded", () => {
   const tok = $("#token"); tok.value = ss.get("cc.token") || ""; tok.addEventListener("input", () => ss.set("cc.token", tok.value));
+  const th = $("#theme"), setTheme = t => { document.documentElement.dataset.theme = t; th.textContent = "Theme: " + t; th.setAttribute("aria-label", `Theme: ${t}. Click to change`); ls.set("cc.theme", t); };
+  setTheme(document.documentElement.dataset.theme);
+  th.addEventListener("click", () => setTheme({dark: "light", light: "system", system: "dark"}[document.documentElement.dataset.theme] || "dark"));
   $("#run-select").addEventListener("change", e => loadRun(e.target.value));
   renderNav(); renderHeader(); route(); init();
   setInterval(async () => { if (S.conn === "stale" || S.rp.active) return; try { const r = await api("/api/runs"); const sig = JSON.stringify(r.runs.map(x => [x.run_id, x.n])); if (sig !== S.runSig) { S.runSig = sig; const keep = S.run; await loadRuns(); $("#run-select").value = keep; } } catch (e) {} }, 8000);

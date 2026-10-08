@@ -1,9 +1,10 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Research Command Centre</title>
+<script>try{var t=localStorage.getItem("cc.theme");if(t==="light"||t==="system")document.documentElement.dataset.theme=t}catch(e){}</script>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="/static/style.css">
 </head>
@@ -15,6 +16,7 @@
     <span id="mode-badge" class="badge mode" role="status" aria-label="Current mode">MODE: …</span>
     <span id="conn" class="badge conn connecting" role="status">○ CONNECTING</span>
     <label class="inline">Run <select id="run-select" aria-label="Run selector"></select></label>
+    <button id="theme" class="themebtn" type="button" aria-label="Theme: dark. Click to change">Theme: dark</button>
     <label class="inline">Token <input id="token" type="password" autocomplete="off" placeholder="X-CC-Token" aria-label="X-CC-Token for commands"></label>
   </div>
 </header>

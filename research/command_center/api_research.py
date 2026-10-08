@@ -28,7 +28,7 @@ REFUSAL_MSG = ("requires explicit user approval recorded by the user plus an app
 SEGMENTS_ALLOWED = ("train", "validation")
 COST_SCENARIOS = {"x1": 1.0, "x1_5": 1.5, "x2": 2.0}   # equals configs/daily_costs.yaml scenarios (asserted in tests)
 PREREG_SEED = 20261008
-SYM_RE = re.compile(r"^[A-Z][A-Z0-9.\-]{0,9}$")
+SYM_RE = re.compile(r"[A-Z][A-Z0-9.\-]{0,9}\Z")
 EXP_ID_RE = re.compile(r"^exp_\d{8}T\d{6}_[0-9a-f]{8}$")
 MAX_ACTIVE_JOBS = 20
 
@@ -187,6 +187,24 @@ def preregistered(c: Ctx, log_id: str) -> dict | None:
     return None
 
 
+def deviation_row(c: Ctx, sid: str, seed: int, syms: list[str]) -> str:
+    """Exact first-cell id a deviating run must have in docs/EXPERIMENT_LOG.md (status cell starting REGISTERED)."""
+    return f"{sid}@seed={seed},symbols={'+'.join(sorted(syms))}"
+
+
+def deviation_registered(c: Ctx, sid: str, seed: int, syms: list[str]) -> bool:
+    want = deviation_row(c, sid, seed, syms)
+    try:
+        text = (Path(c.paths["docs_dir"]) / "EXPERIMENT_LOG.md").read_text(encoding="utf-8")
+    except OSError:
+        return False
+    for line in text.splitlines():
+        cells = [x.strip() for x in line.strip().strip("|").split("|")]
+        if cells and cells[0] == want and any(x.upper().startswith("REGISTERED") for x in cells[1:]):
+            return True
+    return False
+
+
 def log_test_refusal(c: Ctx, sid, who: str) -> None:
     c.rdb.audit("experiment.create", sid, "refused_test_segment", {"segment": "test", "who": who})
     emit_event(c, "incident", {"severity": "warning", "summary": f"REFUSED experiment on sealed test segment (strategy {sid})"})
@@ -269,6 +287,13 @@ def api_create_experiment(h, m, q, body):
     if probs:
         c.rdb.audit("experiment.create", sid, "refused:inputs_inadequate", {"problems": probs[:20]})
         raise ApiError(422, "inputs_inadequate", code="inputs_inadequate", inputs_inadequate=probs)
+    deviates = sorted(syms) != sorted(cfg["universe"]) or seed != PREREG_SEED
+    if deviates and not deviation_registered(c, sid, seed, syms):
+        row = deviation_row(c, sid, seed, syms)
+        reject(c, sid, "not_preregistered", 422,
+               "this run deviates from the pre-registered defaults (all universe symbols, seed 20261008) and is not registered. Register first, then run: add a row to "
+               f"docs/EXPERIMENT_LOG.md whose first cell is exactly '{row}' and whose status starts with REGISTERED.",
+               required_log_id=row, defaults={"seed": PREREG_SEED, "symbols": list(cfg["universe"])})
     q_ = get_queue(c)
     active = [j for j in q_.list(200) if j["status"] in ("queued", "running")]
     if len(active) >= MAX_ACTIVE_JOBS:
@@ -281,12 +306,11 @@ def api_create_experiment(h, m, q, body):
     argv = [sys.executable, str(Path(c.paths["root"]) / "scripts" / "run_daily.py"), "--segment", seg, "--variant", variant,
             "--symbols", ",".join(syms), "--seed", str(seed), "--out-dir", str(out_dir),
             "--data-dir", str(Path(c.paths["data_dir"]).resolve()), "--progress"]
-    deviates = sorted(syms) != sorted(cfg["universe"]) or seed != PREREG_SEED
     params = {"strategy_id": sid, "pipeline_variant": variant, "symbols": syms, "segment": seg, "cost_scenario": cs, "seed": seed,
               "notes": notes, "pre_registration": {"experiment_log_id": log_id, "doc": "docs/EXPERIMENT_LOG.md", "found": True},
-              "deviates_from_preregistered_defaults": deviates,
-              "deviation_note": ("symbols/seed differ from the pre-registered defaults (all universe symbols, seed 20261008). The job ledger "
-                                 "(research.sqlite3) records this run; add a line to docs/EXPERIMENT_LOG.md before acting on its results."
+              "deviates_from_preregistered_defaults": deviates, "deviation_registered": bool(deviates),
+              "deviation_note": ("symbols/seed differ from the pre-registered defaults (all universe symbols, seed 20261008) but this run is registered in docs/EXPERIMENT_LOG.md; "
+                                 "the job ledger (research.sqlite3) also records this run."
                                  if deviates else None),
               "cost_scenario_semantics": "the pipeline always prices x1/x1.5/x2; cost_scenario selects which row is shown as the headline",
               "dataset_manifest_sha256": {s: v for s, v in _live_manifest_sha(c).items() if s in syms}}

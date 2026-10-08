@@ -6,7 +6,12 @@ const URL_ATTRS = new Set(["href", "src", "action", "formaction", "xlink:href"])
 function setAttr(node, k, v) {
   if (v === false || v == null) return;
   if (/^on/i.test(k)) return; // inline handlers are never allowed; use `on: {click: fn}`
-  if (URL_ATTRS.has(k) && typeof v === "string" && /^\s*(javascript|data|vbscript):/i.test(v)) return;
+  if (URL_ATTRS.has(k) && typeof v === "string") {
+    // Browsers ignore tabs/newlines/control chars inside and before a URL scheme, so normalise before testing; allow only safe schemes.
+    const norm = v.replace(/[\u0000-\u0020\u007f-\u009f]+/g, "");
+    const m = /^([a-z][a-z0-9+.-]*):/i.exec(norm);
+    if (m && !["http", "https", "mailto"].includes(m[1].toLowerCase())) return;
+  }
   node.setAttribute(k, v === true ? "" : String(v));
 }
 

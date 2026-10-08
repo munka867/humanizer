@@ -155,6 +155,28 @@ def test_missing_csv_is_404_not_empty(srv, data_root):
     assert st == 404 and j["reason"]
 
 
+def test_sealed_final_test_window_marked(srv, data_root):
+    import pandas as pd
+    import sys as _s
+    _s.path.insert(0, str(ROOT / "src"))
+    from tradelab.validation.splits import make_split
+    days = pd.bdate_range("2024-01-02", "2026-10-07")
+    write_csv(data_root / "data/processed/SYNTHETIC_DUPN_1d.csv", [(d.strftime("%Y-%m-%d"), 50, 51, 49, 50.5, 1000) for d in days], "DUP")
+    j = call(srv, "GET", "/api/bars?symbol=DUP&exchange=NYSE&interval=1D")[1]
+    sw = j["meta"]["sealed_final_test"]
+    assert sw["note"].startswith("sealed final-test window") and "viewing prices is allowed" in sw["note"]
+    assert j["meta"]["sealed_from"] == sw["from"]
+    # common span of ALL instruments with data (min first .. max last), 60/20/20 with 3-day purge, like scripts/run_daily.py
+    sp = make_split(pd.Timestamp("2024-01-02 13:30", tz="UTC"), pd.Timestamp("2026-10-07 13:30", tz="UTC"), (0.6, 0.2, 0.2), pd.Timedelta(days=3))
+    assert sw["from"] == sp.test[0].date().isoformat() and sw["to"] == "2026-10-07"
+    assert len(j["bars"]) == len(days)  # prices are marked, never hidden
+
+
+def test_ticker_validation_rejects_trailing_newline(srv):
+    assert call(srv, "GET", "/api/bars?symbol=SYNA%0A")[0] == 400
+    assert call(srv, "GET", "/api/bars?symbol=SYNA&exchange=ARCA%0A")[0] == 400
+
+
 # ---------------------------------------------------------------- quotes
 def test_quotes_change_vs_prior_close(srv):
     j = call(srv, "GET", "/api/quotes?symbols=SYNA,SYNB")[1]

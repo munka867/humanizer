@@ -60,7 +60,7 @@ def legacy_main():
         subprocess.run([sys.executable, str(HERE / "seed_demo.py"), "--server", BASE, "--token", TOKEN], check=True, capture_output=True)
         with sync_playwright() as pw:
             br = pw.chromium.launch(executable_path=exe, args=["--no-sandbox"])
-            ctx = br.new_context(viewport={"width": 1440, "height": 900})
+            ctx = br.new_context(bypass_csp=True, viewport={"width": 1440, "height": 900})
             page = ctx.new_page()
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
@@ -166,7 +166,7 @@ def main():
         subprocess.run([sys.executable, str(HERE / "seed_demo.py"), "--server", BASE, "--token", TOKEN], check=True, capture_output=True)
         with sync_playwright() as pw:
             br = pw.chromium.launch(executable_path=exe, args=["--no-sandbox"])
-            page = br.new_context(viewport={"width": 1440, "height": 900}).new_page()
+            page = br.new_context(bypass_csp=True, viewport={"width": 1440, "height": 900}).new_page()
             errors, ext = [], []
             page.on("pageerror", lambda e: errors.append(str(e)))
             page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)

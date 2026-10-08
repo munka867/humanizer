@@ -102,12 +102,12 @@
  {
   "name": "backtester tower: role, Complete badge, task, elapsed, last event, queued/done, result preview",
   "ok": true,
-  "detail": "Backtester | Complete | Last task: H3 daily train/validation run | In status 1h 49m | Last 00:21:52 EDT | Queued 1 \u00b7 Done 1 | Test:PASS: pytest tests/test_daily_*.py (17 tests)"
+  "detail": "Backtester | Complete | Last task: H3 daily train/validation run | In status 2h 11m | Last 00:21:52 EDT | Queued 1 \u00b7 Done 1 | Test:PASS: pytest tests/test_daily_*.py (17 tests)"
  },
  {
   "name": "validator tower shows Complete + audit task text from events",
   "ok": true,
-  "detail": "Independent validator | Complete | Last task: Daily audit: 0 high, 1 medium, 7 low | In status 1h 49m | Last 00:21:45 EDT | Queued 0 \u00b7 Done 1 | Latest resultnone reported"
+  "detail": "Independent validator | Complete | Last task: Daily audit: 0 high, 1 medium, 7 low | In status 2h 11m | Last 00:21:45 EDT | Queued 0 \u00b7 Done 1 | Latest resultnone reported"
  },
  {
   "name": "no fabricated percentages / token / cost numbers on towers or summary",
@@ -242,7 +242,7 @@
  {
   "name": "emit.py posted a real message.sent",
   "ok": true,
-  "detail": "{\"ok\": true, \"accepted\": [{\"event_id\": \"7129dcae2ce34de882b7289dc261ffdd\", \"seq\": 50}], \"duplicates\": [], \"rejected\": []"
+  "detail": "{\"ok\": true, \"accepted\": [{\"event_id\": \"548ebeb54c824e95bee48da076a46e80\", \"seq\": 50}], \"duplicates\": [], \"rejected\": []"
  },
  {
   "name": "live message.sent pulses exactly that edge (and no other)",
@@ -252,12 +252,12 @@
  {
   "name": "hover/focus shows sender, recipient, timestamp and preview",
   "ok": true,
-  "detail": "validator to monitor, 02:11:45 EDT: Audit complete, 1 medium finding"
+  "detail": "validator to monitor, 02:32:55 EDT: Audit complete, 1 medium finding"
  },
  {
   "name": "click opens details with sender, recipient, time and preview",
   "ok": true,
-  "detail": "Message: monitor and validator | Sender | validator | Recipient | monitor | Time | 02:11:45 EDT | Preview | Audit complete, 1 medium finding | Kind | message | null | | This solid line exists because a message.sent event was recorded."
+  "detail": "Message: monitor and validator | Sender | validator | Recipient | monitor | Time | 02:32:55 EDT | Preview | Audit complete, 1 medium finding | Kind | message | null | | This solid line exists because a message.sent event was recorded."
  },
  {
   "name": "pulse stops by itself",
@@ -462,7 +462,7 @@
  {
   "name": "replay shows the labelled historical (original) timestamp",
   "ok": true,
-  "detail": "Original time 2026-10-07 23:11:38 EDT"
+  "detail": "Original time 2026-10-07 23:32:47 EDT"
  },
  {
   "name": "pause stops the replay (button reads Play)",
@@ -507,7 +507,7 @@
  {
   "name": "killing the server shows STALE honestly (banner explains, counters paused)",
   "ok": true,
-  "detail": "Event stream is stale. Towers show the last known state as of 2026-10-08 02:12:05 EDT; elapsed counters are paused."
+  "detail": "Event stream is stale. Towers show the last known state as of 2026-10-08 02:33:15 EDT; elapsed counters are paused."
  },
  {
   "name": "after reconnect the feed resumes with no duplicate events (rows == unique seqs == server events)",

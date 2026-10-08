@@ -30,6 +30,8 @@ LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 MIME = {".html": "text/html; charset=utf-8", ".js": "application/javascript; charset=utf-8",
         ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".json": "application/json", ".md": "text/plain; charset=utf-8",
         ".png": "image/png", ".woff2": "font/woff2"}
+CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+       "connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
 NOT_ATTACHED = "recorded, no runtime attached"
 CANCEL_NOTE = "Cancel research is only a recorded request. It never touches positions or protective orders."
 
@@ -72,10 +74,16 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
+        self._security_headers()
         for k, v in (extra or {}).items():
             self.send_header(k, v)
         self.end_headers()
         self.wfile.write(body)
+
+    def _security_headers(self):
+        self.send_header("Content-Security-Policy", CSP)
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "no-referrer")
 
     def _json(self, code, obj):
         self._send(code, json.dumps(obj).encode())
@@ -99,15 +107,20 @@ class Handler(BaseHTTPRequestHandler):
         return bool(tok) and hmac.compare_digest(tok.encode(), self.server.token.encode())
 
     def _body(self, limit=None):
-        if "application/json" not in (self.headers.get("Content-Type") or ""):
+        ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        if ctype != "application/json":
             raise ValidationError("Content-Type must be application/json")
-        n = int(self.headers.get("Content-Length") or 0)
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            raise ValidationError("invalid Content-Length") from None
         if n <= 0 or n > (limit or MAX_BODY):
             raise ValidationError("body missing or too large")
+        raw = self.rfile.read(n)
         try:
-            return json.loads(self.rfile.read(n))
-        except json.JSONDecodeError as e:
-            raise ValidationError(f"invalid JSON: {e}") from None
+            return json.loads(raw.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError, RecursionError) as e:
+            raise ValidationError(f"invalid JSON: {type(e).__name__}") from None
 
     # ---- routing
     def do_GET(self):
@@ -284,6 +297,7 @@ class Handler(BaseHTTPRequestHandler):
         run_id = q.get("run_id") or None
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
+        self._security_headers()
         self.send_header("Cache-Control", "no-store")
         self.send_header("Connection", "close")
         self.send_header("X-Accel-Buffering", "no")

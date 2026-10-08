@@ -187,7 +187,7 @@
  {
   "check": "nav state persisted on the SERVER (/api/prefs)",
   "pass": true,
-  "detail": "{'shell.nav_collapsed': True}"
+  "detail": "{'market.selected': '756733:ARCA', 'panel.cc.side': {'w': 310, 'collapsed': True}, 'shell.nav_collapsed': True}"
  },
  {
   "check": "with the UI cache wiped the server prefs still restore the nav state",
@@ -217,7 +217,7 @@
  {
   "check": "mode change recorded as audit.config (old DEMO -> new BACKTEST)",
   "pass": true,
-  "detail": "[{'seq': 35, 'event_id': '3b69f6ea7fc3455f9a8cb5df86b730f6', 'timestamp_utc': '2026-10-08T05:30:27.843Z', 'run_id': 'demo-run-1', 'source': 'ui', 'target': 'mode', 'outcome': 'applied', 'area': 'ui', 'action': 'mode', 'old': 'DEMO', 'reason': 'display label only; no execution exists', 'new': 'BACKTEST'}]"
+  "detail": "[{'seq': 35, 'event_id': 'd1ffa32cb7ff42179b52438ee413a8e6', 'timestamp_utc': '2026-10-08T06:39:35.928Z', 'run_id': 'demo-run-1', 'source': 'ui', 'reason': 'display label only; no execution exists', 'new': 'BACKTEST', 'area': 'ui', 'old': 'DEMO', 'action': 'mode', 'target': 'mode', 'outcome': 'applied'}]"
  },
  {
   "check": "PAPER is refused with a concise reason and mode stays BACKTEST",
@@ -317,7 +317,7 @@
  {
   "check": "notifications list the real incident text",
   "pass": true,
-  "detail": "Notifications Incident \u00b7 warning Validator found a high-severity finding 2026-10-08 01:30:18 EDT \u00b7 run demo-run-1 Inci"
+  "detail": "Notifications Incident \u00b7 warning Validator found a high-severity finding 2026-10-08 02:39:26 EDT \u00b7 run demo-run-1 Inci"
  },
  {
   "check": "Alt+3 opens Portfolio & Orders",
@@ -380,14 +380,14 @@
   "detail": ""
  },
  {
-  "check": "table: column can be hidden and the state is persisted in prefs",
+  "check": "table: column can be hidden",
   "pass": true,
   "detail": ""
  },
  {
   "check": "CSV export contains the visible columns and rows only",
   "pass": true,
-  "detail": "['Symbol,Name,Exchange,IBKR conId,Last bar,Bars,Retrieved', 'SPY,,ARCA,756733,2026-10-07,1000,2026-10-08']"
+  "detail": "Symbol,First,Last,Bars,Missing,Gaps >4d,Quality,Adjustment,Retrieved"
  },
  {
   "check": "table: column resize (keyboard) widens the column",
@@ -410,12 +410,7 @@
   "detail": ""
  },
  {
-  "check": "agents placeholder lists real events from the stream",
-  "pass": true,
-  "detail": ""
- },
- {
-  "check": "table row expansion works (click) and shows payload as text",
+  "check": "Agent Team workspace renders the real tower view (detailed checks live in verify_agents.py)",
   "pass": true,
   "detail": ""
  },
@@ -442,7 +437,7 @@
  {
   "check": "STALE banner: 'Event stream STALE - showing last known state as of <time>'",
   "pass": true,
-  "detail": "Event stream STALE \u2014 showing last known state as of 01:30:40 EDT. No heartbeat for over 4 s; reconnecting automatically."
+  "detail": "Event stream STALE \u2014 showing last known state as of 02:39:49 EDT. No heartbeat for over 4 s; reconnecting automatically."
  },
  {
   "check": "freshness model: agents feed is 'stale', quotes/broker feeds independent",

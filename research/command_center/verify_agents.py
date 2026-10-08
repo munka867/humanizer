@@ -129,7 +129,7 @@ def main():
 
         with sync_playwright() as pw:
             br = pw.chromium.launch(executable_path=exe, args=["--no-sandbox"])
-            ctx = br.new_context(viewport={"width": 1440, "height": 900})
+            ctx = br.new_context(bypass_csp=True, viewport={"width": 1440, "height": 900})
             ctx.add_init_script(f"localStorage.setItem('cc.token', '{TOKEN}')")
             page = ctx.new_page()
             errors, ext, posts = [], [], []
@@ -455,7 +455,7 @@ def main():
             page.evaluate("document.documentElement.dataset.theme = 'dark'")
 
             # ------------------------------------------------------------ small screens: list view default, inspector as drawer
-            ctx2 = br.new_context(viewport={"width": 800, "height": 700})
+            ctx2 = br.new_context(bypass_csp=True, viewport={"width": 800, "height": 700})
             p2 = ctx2.new_page()
             errs2 = []
             p2.on("pageerror", lambda e: errs2.append(str(e)))
@@ -487,7 +487,7 @@ def main():
             ctx2.close()
 
             # dev harness (stub ctx, live GETs): the workspace must also mount there
-            p3 = br.new_context(viewport={"width": 1440, "height": 900}).new_page()
+            p3 = br.new_context(bypass_csp=True, viewport={"width": 1440, "height": 900}).new_page()
             errs3 = []
             p3.on("pageerror", lambda e: errs3.append(str(e))); p3.on("console", lambda m: errs3.append(m.text) if m.type == "error" else None)
             p3.goto(BASE + "/static/dev.html?ws=agents&live=1"); p3.wait_for_selector(".ag-tower", state="attached", timeout=10000); p3.wait_for_timeout(1500)

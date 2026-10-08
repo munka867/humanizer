@@ -35,7 +35,7 @@ MAX_IMPORT_BYTES = 5 * 1024 * 1024
 MIN_SEGMENT_BARS = 40          # software minimum so the daily pipeline yields non-empty tables; NOT a statistical sufficiency test
 MAX_MISSING_PCT = 2.0          # adequacy: more than this share of expected sessions missing inside the window
 GAP_CALENDAR_DAYS = 4          # same threshold as DAILY_SPEC max_gap_calendar_days
-SYM_RE = re.compile(r"^[A-Z][A-Z0-9.\-]{0,9}$")
+SYM_RE = re.compile(r"[A-Z][A-Z0-9.\-]{0,9}\Z")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 

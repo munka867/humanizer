@@ -32,9 +32,9 @@ DATA_ROOT = RESEARCH_ROOT  # tests monkeypatch this
 UNAVAILABLE = "unavailable: no entitled source connected"
 STALE_DAYS = 4
 INTERVALS = ("1D", "1W", "1M")
-_SYM_RE = re.compile(r"^[A-Z][A-Z0-9.\-]{0,9}$")
-_EX_RE = re.compile(r"^[A-Z0-9]{2,12}$")
-_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_SYM_RE = re.compile(r"[A-Z][A-Z0-9.\-]{0,9}\Z")
+_EX_RE = re.compile(r"[A-Z0-9]{2,12}\Z")
+_DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}\Z")
 _cache: dict = {}
 _lock = threading.Lock()
 
@@ -90,7 +90,7 @@ def resolve(symbol, exchange=None, conid=None) -> dict:
             raise ApiError(400, "conid must be an integer") from None
     if exchange not in (None, ""):
         exchange = str(exchange).upper()
-        if not _EX_RE.match(exchange):
+        if not _EX_RE.fullmatch(exchange):
             raise ApiError(400, "invalid exchange")
     else:
         exchange = None
@@ -98,8 +98,8 @@ def resolve(symbol, exchange=None, conid=None) -> dict:
         raise ApiError(400, "symbol is required")
     sym = None
     if symbol not in (None, ""):
-        sym = str(symbol).strip().upper()
-        if not _SYM_RE.match(sym):
+        sym = str(symbol).upper()
+        if not _SYM_RE.fullmatch(sym):
             raise ApiError(400, "invalid symbol")
     m = [i for i in ins if (sym is None or i["symbol"] == sym) and (conid is None or i["conid"] == conid)
          and (exchange is None or i["exchange"] == exchange)]
@@ -185,7 +185,7 @@ def _date_param(q, name):
     v = q.get(name)
     if v in (None, ""):
         return None
-    if not _DATE_RE.match(v):
+    if not _DATE_RE.fullmatch(v):
         raise ApiError(400, f"{name} must be YYYY-MM-DD")
     try:
         return dt.date.fromisoformat(v)
@@ -218,11 +218,56 @@ def api_bars(h, m, q, body):
                 "source": "IBKR connector (daily files)", "feed": "delayed", "delayed_seconds": ins["delayed_seconds"],
                 "retrieved_on": ins["retrieved_on"], "adjusted_for_dividends": ins["adjusted_for_dividends"], "session": "regular",
                 "timezone": "America/New_York", "bar_time_label": "session", "interval": interval,
+                "sealed_final_test": (sw := sealed_window()), "sealed_from": sw["from"] if sw else None,
                 "last_session": rows[-1]["date"].isoformat() if rows else None, "first": bars[0]["time"] if bars else None, "last": bars[-1]["time"] if bars else None, "n": len(bars)}
         return h._json(200, {"meta": meta, "bars": bars,
                              "limits": {"intervals": list(INTERVALS), "intraday": "unavailable: no intraday history source connected",
                                         "extended_hours": "unavailable"}})
     return _guard(h, go)
+
+
+# ------------------------------------------------------------------ sealed final-test window
+SEALED_NOTE = ("sealed final-test window: do not use for tuning; viewing prices is allowed, evaluating strategies on it is not")
+
+
+_sealed_cache: dict = {}
+
+
+def sealed_window():
+    """Final-test window from tradelab's make_split over the COMMON span of every instrument with data, exactly like
+    scripts/run_daily.py (min first bar .. max last bar, fractions/purge from configs/daily_strategy.yaml, default 60/20/20 and 3 days).
+    Deterministic; returns None (with no guess) if the split cannot be computed."""
+    key = tuple((str(i["csv"]), i["csv"].stat().st_mtime_ns) for i in instruments() if i["data_present"])
+    if key in _sealed_cache:
+        return _sealed_cache[key]
+    _sealed_cache.clear()
+    _sealed_cache[key] = None
+    try:
+        src = str(RESEARCH_ROOT / "src")
+        if src not in sys.path:
+            sys.path.insert(0, src)
+        import pandas as pd
+        from tradelab.validation.splits import make_split
+        fr, purge = (0.6, 0.2, 0.2), 3
+        try:
+            import yaml
+            sp = yaml.safe_load((Path(RESEARCH_ROOT) / "configs" / "daily_strategy.yaml").read_text())["split"]
+            fr, purge = tuple(sp["fractions"]), int(sp["purge_days"])
+        except Exception:
+            pass
+        spans = []
+        for i in instruments():
+            if i["data_present"]:
+                r = _load(i)
+                if r:
+                    spans.append((r[0]["ts"], r[-1]["ts"]))
+        if not spans:
+            return None
+        sp_ = make_split(pd.Timestamp(min(a for a, _ in spans)), pd.Timestamp(max(b for _, b in spans)), fr, pd.Timedelta(days=purge))
+        _sealed_cache[key] = {"from": sp_.test[0].date().isoformat(), "to": sp_.test[1].date().isoformat(), "note": SEALED_NOTE}
+        return _sealed_cache[key]
+    except Exception:
+        return None
 
 
 # ------------------------------------------------------------------ quotes

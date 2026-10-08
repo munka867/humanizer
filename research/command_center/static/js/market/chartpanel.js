@@ -14,7 +14,7 @@ export function createChartPanel(ctx, { compact = false, extra = null, idPrefix 
   let ins = null, quote = null, bars = [], meta = null, limits = null, markers = [], markersReason = null, seq = 0, destroyed = false;
   let interval = ctx.prefs.get("market.interval", "1D"), range = ctx.prefs.get("market.range", "1Y");
   let on = ctx.prefs.get("market.overlays", {}); if (!on || typeof on !== "object") on = {};
-  let L, chart, candles, volume, markerApi, lines = {}, ro, mo, byTime = new Map(), cleanups = [];
+  let L, chart, candles, volume, markerApi, sealedS, lines = {}, ro, mo, byTime = new Map(), cleanups = [];
 
   // ---------------------------------------------------------------- DOM
   const title = el("h2", { class: "mk-ctitle" }), sub = el("span", { class: "mk-csub muted" });
@@ -74,9 +74,12 @@ export function createChartPanel(ctx, { compact = false, extra = null, idPrefix 
     chart.applyOptions({ layout: { background: { type: "solid", color: t.bg }, textColor: t.text }, grid: { vertLines: { color: rgba(t.grid, 0.45) }, horzLines: { color: rgba(t.grid, 0.45) } },
       rightPriceScale: { borderColor: t.grid }, timeScale: { borderColor: t.grid }, crosshair: { vertLine: { color: t.text, labelBackgroundColor: token("--raised") }, horzLine: { color: t.text, labelBackgroundColor: token("--raised") } } });
     candles.applyOptions({ upColor: t.pos, downColor: t.neg, wickUpColor: t.pos, wickDownColor: t.neg });
-    if (bars.length) volume.setData(volData());
+    if (bars.length) { volume.setData(volData()); drawSealed(); }
     for (const [k, s] of Object.entries(lines)) s.applyOptions({ color: lineColor(k) });
   }
+  const sealedFrom = () => meta?.sealed_final_test?.from || null;
+  const inSealed = (t) => !!sealedFrom() && t >= sealedFrom();
+  function drawSealed() { const w = token("--warn"); sealedS.setData(sealedFrom() ? bars.filter((b) => inSealed(b.t)).map((b) => ({ time: b.t, value: 1, color: rgba(w, 0.10) })) : []); }
   const lineColor = (k) => ({ sma20: token("--accent"), sma50: token("--warn"), sma200: token("--demo") }[k]);
   function ensureChart() {
     if (chart) return;
@@ -87,6 +90,8 @@ export function createChartPanel(ctx, { compact = false, extra = null, idPrefix 
       crosshair: { mode: L.CrosshairMode.Normal }, localization: { locale: "en-US" },
       timeScale: { rightOffset: 3, timeVisible: false, secondsVisible: false, fixLeftEdge: false }, handleScale: { axisPressedMouseMove: true }, rightPriceScale: { scaleMargins: { top: compact ? 0.16 : 0.1, bottom: 0.24 } },
     });
+    sealedS = chart.addSeries(L.HistogramSeries, { priceScaleId: "sealed", priceLineVisible: false, lastValueVisible: false, base: 0, autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 1 } }) });
+    chart.priceScale("sealed").applyOptions({ scaleMargins: { top: 0, bottom: 0 }, visible: false });
     candles = chart.addSeries(L.CandlestickSeries, { borderVisible: false, priceLineVisible: true });
     volume = chart.addSeries(L.HistogramSeries, { priceFormat: { type: "volume" }, priceScaleId: "vol", priceLineVisible: false, lastValueVisible: false });
     chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
@@ -113,7 +118,7 @@ export function createChartPanel(ctx, { compact = false, extra = null, idPrefix 
       if (!bars.length) throw Object.assign(new Error("No bars returned for this instrument and interval."), { empty: true });
       overlayMsg.hidden = true; ensureChart();
       candles.setData(bars.map((x) => ({ time: x.t, open: x.open, high: x.high, low: x.low, close: x.close })));
-      volume.setData(volData());
+      volume.setData(volData()); drawSealed();
       byTime = new Map(bars.map((x, i) => [x.t, i]));
       drawControls(); drawOverlays(); drawMarkers(); drawChips(); applyRange(); showReadout(null);
       canvas.dataset.ready = "1"; canvas.dataset.bars = String(bars.length); canvas.dataset.interval = interval;
@@ -152,6 +157,7 @@ export function createChartPanel(ctx, { compact = false, extra = null, idPrefix 
     legend.replaceChildren(el("span", { class: "mk-legend-title" }, "Trade markers"),
       ...Object.entries(STATE_META).map(([k, [g, lab]]) => el("span", { class: ["mk-lg", `mk-lg-${k}`], title: `${lab}: ${k === "filled" ? "executed fill" : k === "submitted" ? "sent to a broker, not yet filled" : "proposed by a strategy, never sent"}` }, el("span", { class: "mk-glyph", "aria-hidden": "true" }, g), lab)),
       markers.length ? el("span", { class: "muted" }, `${markers.length} from real trade records`) : el("span", { class: "muted", "data-testid": "markers-empty", title: markersReason || "" }, "none: no real trade records exist"),
+      ...(sealedFrom() ? [el("span", { class: "mk-lg mk-lg-sealed", title: meta.sealed_final_test.note }, el("span", { class: "mk-swatch", "aria-hidden": "true" }), "Sealed final-test period")] : []),
       ...(last?.partial ? [el("span", { class: "mk-lg mk-lg-partial" }, el("span", { class: "mk-glyph", "aria-hidden": "true" }, "◦"), "Partial bar (period in progress)")] : []));
     mstrip.replaceChildren(...tm.slice(0, 20).map((x) => el("button", { type: "button", class: "mk-mbtn", dataset: { markerId: x.id }, on: { click: () => openEvidence([x._m]) } },
       `${x._m.t ?? x.time} · ${STATE_META[x._m.state] ? STATE_META[x._m.state][1] : "Marker"} · ${x._m.side || ""}`)));
@@ -167,11 +173,12 @@ export function createChartPanel(ctx, { compact = false, extra = null, idPrefix 
       mk(m.adjusted_for_dividends ? "ok" : "warn", m.adjusted_for_dividends ? "Dividend-adjusted" : "Unadjusted for dividends", "Prices are as traded; dividends/splits are not applied.", "info"),
       mk("neutral", "Regular session", "Extended hours: unavailable.", "info"),
     ];
+    if (sealedFrom()) all.splice(2, 0, mk("warn", `Sealed final-test period from ${sealedFrom()}`, m.sealed_final_test.note, "lock"));
     if (bars.at(-1)?.partial) all.push(mk("warn", "Last bar partial", "The latest weekly/monthly bar covers a period still in progress.", "alert"));
     if (compact) {
-      const [a, b, , ...rest] = all;
+      const [a, b, ...rest0] = all, rest = rest0.slice(1), sealedChip = rest0[0]?.textContent.startsWith("Sealed") ? rest0[0] : null;
       const more = ui.btn("Data details", { icon: "info", kind: "ghost", onClick: (e) => ui.popover(e.currentTarget, (box) => box.append(el("div", { class: "pop-title" }, "Data provenance"), kv([["Source", m.source], ["Instrument", `${m.symbol} · ${m.exchange} · conId ${m.conid}`], ["Currency", m.currency], ["Feed", `${m.feed}${m.delayed_seconds ? ` (${m.delayed_seconds}s)` : ""}`], ["Retrieved", m.retrieved_on], ["As of", asOf], ["Timezone", m.timezone], ["Adjustment", m.adjusted_for_dividends ? "dividend-adjusted" : "unadjusted for dividends"], ["Session", "regular only; extended hours unavailable"], ["Bars", `${m.n} (${interval})`]]) ), { label: "Data provenance", width: 360 }) });
-      chips.replaceChildren(a, b, ...rest.filter((x) => x.textContent.startsWith("Last bar")), more);
+      chips.replaceChildren(...[a, b, sealedChip].filter(Boolean), ...rest.filter((x) => x.textContent.startsWith("Last bar")), more);
     } else chips.replaceChildren(...all);
   }
 
@@ -198,7 +205,7 @@ export function createChartPanel(ctx, { compact = false, extra = null, idPrefix 
     const cur = meta?.currency || "USD", item = (k, v, cls) => el("span", { class: "mk-ro" }, el("span", { class: "muted" }, k), el("b", { class: cls || "" }, v));
     readout.dataset.hover = hovering ? "1" : "0";
     readout.replaceChildren(el("span", { class: "mk-ro-date" }, `${b.t}${hovering ? "" : " (latest)"}`), item("O", fmt.price(b.open)), item("H", fmt.price(b.high)), item("L", fmt.price(b.low)), item("C", fmt.price(b.close)),
-      item("Vol", fmt.compact(b.volume)), item("Chg", chg == null ? "—" : fmt.pct(chg), fmt.dir(chg)), el("span", { class: "mk-ro-note muted" }, `${cur}, ${interval}${b.partial ? ", partial" : ""}`));
+      item("Vol", fmt.compact(b.volume)), item("Chg", chg == null ? "—" : fmt.pct(chg), fmt.dir(chg)), el("span", { class: "mk-ro-note muted" }, `${cur}, ${interval}${b.partial ? ", partial" : ""}`), inSealed(b.t) ? el("span", { class: "mk-ro-sealed", title: meta.sealed_final_test.note }, "sealed final-test period") : null);
   }
   function onCross(p) { if (!bars.length) return; if (!p?.time || !byTime.has(p.time)) return showReadout(null); showReadout(byTime.get(p.time)); }
   function onClick(p) {

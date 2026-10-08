@@ -251,3 +251,104 @@ Pooled trade counts treat three highly correlated ETFs as independent (train V1:
   instrument's long/short counts, so long-heavy strategies get no free drift credit and shorts are compared with random shorts. SPY-short losses vs QQQ/IWM-short gains (validation n = 29/20/27, CIs
   wide) are sample noise, not a bug.
 * Sealed-test protocol: `--segment test` requires one variant and a freeze record, goes through `evaluate_final_test`, and the stored result files contain no test-segment statistics.
+
+---
+
+# Dashboard security audit (phase 4)
+
+Scope: `command_center/` server (`server.py`, `router.py`, `schemas.py`, `store.py`, `jobs.py`, `api_core.py`, `api_market.py`,
+`api_research.py`, `api_data.py`, `market_store.py`) and `static/js/**`. Method: read the code, then attacked a live instance (own port 8830, temp DB,
+temp ledger/import dirs, Chromium via Playwright) with XSS, injection, traversal, auth, DoS and protocol-abuse payloads. No broker tool was called and
+the sealed test segment was not run. Tests: `tests/test_review_dashboard_http.py` (25 pass, 5 strict-xfail) and `tests/test_review_dashboard_ui.py`
+(2 pass, 3 strict-xfail). Strict xfail = open finding; remove the marker when fixed.
+
+Severity count: **HIGH 0, MEDIUM 2, LOW 9, INFO 4.** No XSS, no auth bypass, no path traversal, no SQL injection, no argument injection and no
+order/broker code path was found.
+
+## Top issues
+1. **P4-01 (MEDIUM)** the experiment builder lets a token holder run unlimited validation experiments with chosen seeds / symbol subsets without counting them as variants.
+2. **P4-03 (MEDIUM)** `/api/bars` and the Stocks chart serve and draw the sealed final-test period's prices (199 of 1000 SPY bars) unmarked.
+3. **P4-09 (LOW, honesty)** the token box says "Token set. Changes can be saved." for any string; the token is never checked against the server.
+
+## Findings
+
+### P4-01 MEDIUM - pre-registration is advisory; the builder is a forking-paths machine on validation
+`api_research.py:221-295`. `POST /api/experiments` accepts any `seed` in [0, 2^31), any non-empty subset of the universe and any cost scenario for `train` or `validation`;
+each run is queued and executed. The only brake is a flag `deviates_from_preregistered_defaults` and text telling the human to add an EXPERIMENT_LOG line. The runs are not
+counted toward `n_variants_tried` (N = 16 in Bonferroni/DSR), there is no per-strategy cap (only 20 active jobs) and no requirement that a deviation be logged first (CLAUDE.md:
+"every variant/parameter tried goes in EXPERIMENT_LOG BEFORE results are read"). Seven symbol subsets x seeds x two segments can be browsed until something looks good.
+Evidence: `test_experiment_argv_cannot_be_injected` shows the validation rules; the acceptance of deviating runs is by design (response `deviates_from_preregistered_defaults: true`).
+Fix: refuse (HTTP 422) any run whose (strategy, symbols, seed, segment) is not the registered default unless a matching REGISTERED row exists in EXPERIMENT_LOG; count accepted
+deviating runs in a `variants_tried` figure shown next to every result and fed into the adjustment.
+
+### P4-02 LOW - audit/ledger/event writes are unauthenticated in origin and spoofable
+`schemas.py:validate_event`, `server.py:208`, `api_research.py:190-201`. Any token holder can post events with any `source` ("research_api", "ui", ...) and any agent id, so the Agent/Audit
+views cannot distinguish system events from fabricated ones (`decision.summary`, `test.result`, `approval.resolved` look identical). A refused test-segment request also appends a row to
+`results/test_access_log.jsonl` per call (unbounded spam; it never counts as an access because `granted:false`, verified with `final_test_guard.granted_accesses`).
+Fix: reserve sources for server-generated events (reject `source in {"ui","research_api",...}` from `/api/events`), rate-limit/de-duplicate the denied-access rows (or write them to the audit table only).
+
+### P4-03 MEDIUM - sealed-period prices are served and charted
+`api_market.py:196-230` (`/api/bars`, `/api/quotes`), `static/js/market/chartpanel.js`. The final-test window (last 20%, 2025-12-20 onward) is served like any other data: `/api/bars` returns 199 of
+1000 SPY bars in the sealed window and the Stocks chart's "ALL"/"2Y" ranges draw them. This is not a strategy evaluation, but it shows the researcher the market path the final test will be judged on,
+weakening "untouched". Reproducer: `test_sealed_test_period_prices_are_not_served_unmarked` (xfail; uses timestamps only).
+Fix: add `sealed_from` (derived from the frozen split) to `/api/bars` meta and shade/label the sealed window in the chart, or cap the default range at the end of validation until the final test has been consumed.
+
+### P4-04 LOW - Content-Type check is a substring test
+`server.py:102`. `"application/json" in Content-Type` accepts `text/plain;x=application/json`, a CORS-safelisted type, so a cross-site form/`fetch` can issue the request without a preflight.
+Mitigated by the token requirement and the Origin check; no unauthenticated state-changing route exists. Reproducer: `test_content_type_must_be_exactly_json`. Fix: parse the media type and compare `== "application/json"`.
+
+### P4-05 LOW - malformed bodies crash the handler instead of returning 400
+`server.py:104`. `int(Content-Length)` on a non-integer, invalid UTF-8 JSON bytes (`UnicodeDecodeError`) and 100k-deep JSON (`RecursionError`) escape `do_POST` (only `ValidationError` is caught): traceback on stderr and
+the connection is dropped with an empty reply. Requires the token; availability/robustness only. Reproducer: `test_malformed_bodies_get_a_400`. Fix: catch `ValueError, RecursionError` in `_body`/`do_POST` and answer 400; set a socket timeout.
+
+### P4-06 LOW - ticker regex accepts a trailing newline
+`api_research.py:31`, `api_data.py:44`. `^...$` with `re.match` lets `"SPY\n"` through (`$` matches before a final newline). It is stopped later by the universe membership check and cannot reach `argv` (symbols are joined and must be universe members), so no injection today.
+Reproducer: `test_symbol_regex_rejects_trailing_newline`. Fix: `re.fullmatch` / `\Z`.
+
+### P4-07 LOW - no Content-Security-Policy, X-Frame-Options or frame-ancestors
+`server.py:69-78`. The XSS safety of the UI rests entirely on code discipline (no `innerHTML`; verified). A CSP (`default-src 'self'; script-src 'self' 'sha256-<theme snippet>'; frame-ancestors 'none'`) would contain a future slip and block clickjacking by a hostile page
+(token storage is partitioned in third-party frames, which limits impact). Reproducer: `test_security_headers_present`.
+
+### P4-08 LOW (latent) - `el()` URL-scheme filter is bypassable
+`static/js/core/dom.js:8-11`. Filter `/^\s*(javascript|data|vbscript):/i` misses `java\tscript:`, `java\nscript:` (browsers strip tab/newline inside URLs) and leading control characters (`\u0001javascript:`), all returned as `ALLOWED` in Chromium. No current sink passes external text to `href`/`src`
+(markdown links are limited to `https?://` or in-app doc ids, `md.js:15-16`; doc/result links are built from regex-validated names), so it is not exploitable today. Reproducer: `test_el_href_filter_blocks_scheme_obfuscation`.
+Fix: strip `[\u0000- ]` before testing, and allow-list schemes (`https:`, `http:`, `#`, `/`).
+
+### P4-09 LOW - token box claims success without validating the token
+`static/js/core/shell.js:176-179`. With no pending preference writes, `Save token` calls `prefs.flush()` which is a no-op that returns ok, and the box shows "Token set. Changes can be saved." for any string; the lock icon turns to "set". The user learns the token is wrong only on the next write.
+Reproducer: `test_token_box_does_not_claim_success_for_a_wrong_token`. Fix: validate with a cheap authenticated no-op (e.g. `POST /api/audit` dry-run or a `GET /api/auth/check` that requires the token) and show "Token rejected".
+
+### P4-10 LOW - "Agents live" and "ready" labels overstate
+`static/js/core/shell.js:251`, `core/env.js:59-67`. The chip reads "Agents live" when only the SSE event stream is connected; the Agents page itself says "No agent running" / "Not started". Navigation badges say "ready" for workspaces whose only condition is that some files or events exist.
+Nothing claims profitability, a connected broker or fabricated numbers, but "live"/"ready" invite the wrong reading. Reproducer: `test_agents_chip_does_not_imply_running_agents`. Fix: "Event stream live", and "has data"/"loaded" instead of "ready".
+
+### P4-11 LOW - local resource exhaustion
+`server.py` (`ThreadingHTTPServer`, no socket timeout), `/api/stream`, `api_data.py:661-700`, `store.py`. Unauthenticated: unlimited SSE connections (each polls SQLite 4x/s) and partial-header sockets hold a thread forever. With the token: events (500 x 1 MB per request) and unique valid import files (up to 5 MB each) accumulate with no quota. Loopback-only, so low.
+Fix: `timeout` on the handler socket, cap concurrent SSE clients, total quota on events DB / import dir.
+
+### P4-12 INFO - token handling
+Token is printed to the console at start (`server.py:342`), written to `command_center/.cc_token` (0600, git-ignored and not under `static/`, so not served), and held in plaintext `localStorage["cc.token"]`, readable by any script in the origin. It is never placed in a URL or log (`log_message` is a no-op). Acceptable for loopback research tooling; an XSS would expose it, which is why P4-07/P4-08 matter.
+
+### P4-13 INFO - raw prices are served over the API
+`/api/bars`, `/api/experiments/<id>/trades` (entry/exit px) return IBKR connector prices to the local browser. Not committed (verified below); keep them out of exports/screenshots shared outside the repo (vendor data terms are unverified).
+
+### P4-14 INFO - strategy state overlay is reversible
+`api_research.py:148-173`. `rejected -> candidate/testing` is allowed with a free-text reason (audited, `approved_*` refused with HTTP 403 and audit rows). A rejection can therefore be undone without a new pre-registered row. Consider requiring an EXPERIMENT_LOG reference for re-opening.
+
+### P4-15 INFO - checks that held (evidence)
+* **XSS/injection (task 1):** `<img onerror>`, `<svg onload>`, `<script>`, `javascript:` / `java\nscript:` URLs, template-literal and markdown-link payloads posted via `/api/events` (every text-bearing event type, agent id/task/blockers/sources/artifact path+title+url), prefs, watchlist names (blocked by `[<>]` rule, quotes/ampersands stored and shown as text), `/api/import/preview` rows and filenames. Chromium on every workspace plus inspector, drawers, tabs, graph nodes and timeline: `window.__xss` never set, 0 dialogs, 0 injected elements, payload visible as literal text (`test_event_text_renders_inert_everywhere`, `test_import_preview_renders_inert`). All sinks use `el()`/text nodes; `grep` finds no `innerHTML`/`insertAdjacentHTML`/`document.write`/`eval`/`new Function` outside comments; `md.js` builds DOM nodes only. CSV export escapes `= + - @` (`core/ui.js:432`).
+* **Auth/host (task 2):** all 10 POST route patterns return 401 with no/wrong `X-CC-Token` and the test fails if a new POST route is added without being covered; constant-time comparison; Host must be loopback (evil.com, localhost.evil.com, 127.0.0.1.evil.com, userinfo tricks rejected: DNS rebinding blocked); foreign/`null` Origin rejected even with a valid token; no CORS headers; PUT/DELETE/PATCH/OPTIONS return 501.
+* **Order path (task 3):** no import of any broker/network library in `command_center` or the daily pipeline (AST test); no route vocabulary for orders/execution; the only subprocess is `jobs.subprocess_runner` (argv list, no shell, scrubbed env, stdin closed, 900 s timeout). Argv is `[python, scripts/run_daily.py, --segment <train|validation>, --variant <registry value>, --symbols <regex+universe checked>, --seed <int>, --out-dir <server-generated>, --data-dir <server path>, --progress]`; injected symbol/seed/segment/strategy/notes/unknown-field payloads were all rejected (`test_experiment_argv_cannot_be_injected`). `approved_paper/approved_live` and PAPER/LIVE modes return 403; SHADOW 501.
+* **Sealed test (task 4):** `segment: test` (and every spelling variant) is refused with 403/400; the refusal appends a `granted:false` row that `granted_accesses()` ignores, so it cannot consume the single look; no endpoint can create a freeze record, run `--segment test`, truncate or rewrite `results/test_access_log.jsonl`, or write `configs/strategies.json`, `docs/EXPERIMENT_LOG.md` or any config (the only file writes are: events/prefs/research/market SQLite files, experiment output dirs, quarantined import copies under `data/raw/ibkr_exports/`, and the append-only denied-access row). Events and audit tables are SQLite-trigger append-only.
+* **Traversal/DoS limits (task 5):** `/api/docs|results/<name>.md` restricted to `[A-Za-z0-9_.-]+\.md` and a fixed directory; static serving resolves and checks the parent (`%2e%2e`, `..%2f`, absolute and double-slash forms all 404; a NUL byte yields a 400 with only the Python message); import filenames are reduced to a safe basename with a sha prefix (`../`, `..\`, `/etc/passwd`, quotes, NUL tested) and written via temp file + `os.replace` inside the import dir; bodies are capped at 1 MB (6.5 MB for imports, 5 MB content); XML entity-expansion and external-entity (XXE) documents are not expanded; a 5 MB CSV previews in about 2.6 s; every SQL statement is parameterised (the one f-string column name is a constant); watchlist/prefs/audit inputs are validated (key regex, 64 KB values, 1000 keys, 200 per request).
+* **Exposure (task 6):** `git ls-files` shows no `data/raw/*` market files, no `data/processed`, no `.cc_token`, no SQLite files; `data/raw/ibkr_connector/MANIFEST.json` (symbols, counts, hashes, no prices) and `results/daily/*` (aggregates) and `command_center/real_events.jsonl` (3.5 KB) are tracked and contain no account ids, e-mail addresses or absolute paths (regex scan); `/api/connections`, `/api/data/coverage`, `/api/research/audit`, job tails and errors are path-redacted (`redact`, `rel`) and returned no `/home`/`/tmp` strings; 130 PNG screenshots are tracked (not inspected image by image; the account is empty and the UI shows "unavailable" for all account fields).
+* **Honesty (task 7):** broker chip "Broker not connected", portfolio/account figures "— (unavailable ...; unknown, not zero)", data chip "Historical", session chip "unverified", footer "Research and simulation only", mode refusals, Monte Carlo labelled "CONDITIONAL SIMULATION", no "profitable"/"live-ready" badge anywhere, committed verdicts shown as development verdicts. Exceptions are P4-09 and P4-10.
+
+
+### Dashboard audit: resolution status (coordinator, 2026-10-08)
+Fixed and test-covered: P4-01 (deviating experiments refused unless registered first), P4-03 (sealed final-test window marked in /api/bars and shaded on the chart; prices are not hidden),
+P4-04 (exact JSON content-type), P4-05 (malformed bodies return 400), P4-06 (ticker fullmatch), P4-07 (CSP, X-Frame-Options, Referrer-Policy; verified by command_center/verify_csp.py,
+which loads every workspace with the CSP enforced and fails on any violation), P4-08 (URL scheme filter normalises control characters, allows only http/https/mailto), P4-09 (token box checks
+the token with GET /api/auth/check), P4-10 (chip relabelled 'Event stream live').
+Still open / accepted: P4-02 (event/audit/ledger writes are spoofable by anyone holding the token; single-user local tool), P4-11 (no socket timeouts, SSE client cap or quotas), and the
+Bonferroni/DSR variant count is not auto-updated for accepted deviating runs (the count of 16 is manual until a variant ledger is wired to the stats).

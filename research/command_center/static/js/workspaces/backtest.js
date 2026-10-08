@@ -38,14 +38,14 @@ export default {
       const stratSel = selectEl(S.strategies.map((s) => ({ value: s.id, label: `${s.name} [${s.state}]${s.runnable ? "" : " — not runnable"}`, disabled: !s.runnable })), want, { label: "Strategy", on: { change: () => { paintStrat(); precheck(); } } });
       const stratInfo = el("div", { "aria-live": "polite" });
       const covSyms = (S.coverage.symbols || []).filter((s) => s.exists && s.n_bars > 0);
-      const checks = covSyms.map((s) => { const cb = el("input", { type: "checkbox", value: s.symbol, checked: true, "aria-label": s.symbol, on: { change: () => precheck() } });
-        return { cb, node: el("label", { class: "chk" }, cb, el("strong", {}, s.symbol), el("span", { class: "muted" }, `${s.first} → ${s.last} · ${s.n_bars} bars`)) }; });
+      const checks = covSyms.map((s) => { const cb = el("input", { type: "checkbox", value: s.symbol, checked: true, disabled: true, "aria-label": `${s.symbol} (locked: pre-registered universe)` });
+        return { cb, node: el("label", { class: "chk", "aria-disabled": "true", title: "Locked: the pre-registered universe" }, cb, el("strong", {}, s.symbol), el("span", { class: "muted" }, `${s.first} → ${s.last} · ${s.n_bars} bars`)) }; });
       const first = covSyms.map((s) => s.first).sort().pop(), last = covSyms.map((s) => s.last).sort()[0];
       const adequacy = el("div", { "aria-live": "polite" });
       const segs = [["train", "Training", "Chronological first 60% of the common span. Used for descriptive statistics; nothing is fitted."],
         ["validation", "Validation", "Next 20% (plus training for the verdict inputs). Purge of 3 calendar days at each boundary."]];
       const segRadios = segs.map(([v, l, d], i) => ({ v, input: el("input", { type: "radio", name: "segment", value: v, checked: i === 0 }), l, d }));
-      const seed = textInput({ type: "number", value: SEED0, label: "Seed", min: 0, step: 1 });
+      const seed = { value: String(SEED0) };
       const cost = selectEl(COSTS.map(([value, label]) => ({ value, label })), "x1", { label: "Cost scenario" });
       const notes = el("textarea", { class: "input", "aria-label": "Notes", maxlength: 2000, placeholder: "Why are you running this? (optional)" });
       const msgs = el("div", { "aria-live": "polite" }); const submit = ctx.ui.btn("Queue experiment", { kind: "primary", icon: "flask", type: "submit" });
@@ -86,7 +86,7 @@ export default {
       } } },
         el("div", { class: "rs-grid-2 stretch" },
           card("Strategy", field("Strategy", stratSel), stratInfo, lockedControl("Strategy parameters", "none (H3 has no free parameters)", "DAILY_SPEC v1 fixes every rule; nothing is tuned. Changing a rule would be a new strategy that must be pre-registered first.")),
-          card("Universe & data", el("div", { class: "field" }, el("span", {}, "Stocks / ETFs with local daily bars"), el("div", { class: "checks" }, checks.map((c) => c.node))),
+          card("Universe & data", el("div", { class: "field" }, el("span", {}, "Pre-registered universe (locked)"), el("div", { class: "checks" }, checks.map((c) => c.node))),
             el("div", { class: "rs-grid-2" }, field("Resolution", selectEl([{ value: "1D", label: "1D (daily)" }, { value: "5m", label: "5m — unavailable", disabled: true }, { value: "1m", label: "1m — unavailable", disabled: true }], "1D", { label: "Resolution" }), "Only daily bars exist locally; no intraday data."),
               lockedControl("Data range", `${first ?? "—"} → ${last ?? "—"}`, "Pre-registered: the whole available span, split 60/20/20 with a 3-day purge. A custom range is not supported.")), adequacy),
           card("Capital & costs", lockedControl("Notional per trade", "$10,000 (fractional shares)", "Pre-registered sizing assumption (DAILY_SPEC). Monte Carlo account size is $10,000."),
@@ -96,7 +96,7 @@ export default {
             ...segRadios.map((r) => el("label", {}, r.input, el("span", {}, el("strong", {}, r.l), el("span", { class: "hint" }, r.d)))),
             el("label", { class: "off", "aria-disabled": "true" }, el("input", { type: "radio", name: "segment", value: "test", disabled: true }), el("span", {}, el("strong", {}, "Final test "), icon("lock", 12), el("span", { class: "hint" },
               "Sealed. Evaluated at most once per frozen strategy through the final-test guard by the research coordinator; this screen can never run it, and a request for it is refused and logged.")))),
-            field("Seed", seed, "Pre-registered seed is 20261008. A different seed or symbol subset is recorded as a deviation."), field("Notes", notes))),
+            lockedControl("Seed", String(SEED0), "Pre-registered seed. A different seed or symbol subset would be a new, unregistered variant: the server refuses it (422) until a matching REGISTERED row exists in docs/EXPERIMENT_LOG.md."), field("Notes", notes))),
         msgs, el("div", { class: "row" }, submit, el("span", { class: "muted" }, "Runs scripts/run_daily.py in a subprocess (one job at a time). Outputs stay on this machine.")));
       panel.append(form); paintStrat(); precheck();
     }

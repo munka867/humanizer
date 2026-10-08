@@ -173,10 +173,10 @@ export function createShell(ctx) {
     box.classList.add("token-pop");
     const input = el("input", { type: "password", class: "input", autocomplete: "off", spellcheck: "false", "aria-label": "X-CC-Token", placeholder: "X-CC-Token", value: "" });
     const msg = el("div", { class: "pop-note", "aria-live": "polite" });
-    const status = () => { const st = prefs.status(); return api.token.has() ? (st.pending ? `Token set. ${st.pending} preference change(s) waiting to save.` : "Token set. Changes can be saved.") : "No token. Browsing works; saving preferences, audit entries and commands is refused."; };
+    const status = () => { const st = prefs.status(); return api.token.has() ? (st.pending ? `Token entered (not verified). ${st.pending} preference change(s) waiting to save.` : "Token entered (not verified yet). Use Save token to check it with the server.") : "No token. Browsing works; saving preferences, audit entries and commands is refused."; };
     msg.textContent = status();
     box.append(el("div", { class: "pop-title" }, "API token"), el("p", { class: "pop-note" }, "Required for every write (preferences, audit, commands). Printed by the server at start-up; stored in this browser's localStorage only."), input,
-      el("div", { class: "row" }, ui.btn("Save token", { kind: "primary", onClick: async () => { api.token.set(input.value); input.value = ""; const r = await prefs.flush(); msg.textContent = status() + (r.ok ? "" : ` (${r.error})`); paintToken(); } }),
+      el("div", { class: "row" }, ui.btn("Save token", { kind: "primary", onClick: async () => { api.token.set(input.value); input.value = ""; let chk = null; try { chk = await api.get("/api/auth/check"); } catch (e) { chk = null; } if (chk && chk.token_valid) { const r = await prefs.flush(); msg.textContent = "Token accepted by the server. Changes can be saved." + (r.ok ? "" : ` (${r.error})`); } else { msg.textContent = chk ? "Token rejected by the server. Changes cannot be saved." : "Could not verify the token (server unreachable)."; } paintToken(); } }),
         ui.btn("Clear", { onClick: () => { api.token.clear(); msg.textContent = status(); paintToken(); } })), msg);
   }, { label: "API token", width: 320 }));
   api.token.onChange(() => { paintToken(); prefs.flush(); });
@@ -248,7 +248,7 @@ export function createShell(ctx) {
     const q = freshness.get("quotes"), qn = { realtime: "Realtime", delayed: "Delayed", historical: "Historical", stale: "Stale", unavailable: "Unavailable", unknown: "Unknown" }[q.state];
     dataChip.set({ label: `Data ${qn}`, sub: q.asOf ? (/^\d{4}/.test(q.asOf) && q.asOf.length === 10 ? q.asOf.slice(5) : fmt.time(q.asOf, { date: false, seconds: false })) : "", icon: q.state === "unavailable" ? "plug_off" : q.state === "stale" ? "alert" : "clock", tone: q.state === "historical" || q.state === "realtime" ? (q.state === "realtime" ? "ok" : "info") : q.state === "unknown" ? "neutral" : q.state === "unavailable" ? "bad" : "warn", aria: `Market data ${qn}${q.asOf ? ", as of " + q.asOf : ""}. ${q.detail || ""}`, title: q.detail });
     const e = events.state();
-    const lab = { live: "Agents live", reconnecting: "Agents reconnecting", stale: "Agents STALE", connecting: "Agents connecting" }[e.conn];
+    const lab = { live: "Event stream live", reconnecting: "Event stream reconnecting", stale: "Event stream STALE", connecting: "Event stream connecting" }[e.conn];
     agentsChip.set({ label: lab, sub: e.conn === "stale" && e.lastBeat ? fmt.time(e.lastBeat, { date: false }) : "", icon: e.conn === "live" ? "radio" : e.conn === "stale" ? "alert" : "clock", tone: e.conn === "live" ? "ok" : e.conn === "connecting" ? "neutral" : "warn", aria: `Agent event stream ${e.conn}`, title: freshness.get("agents").detail });
     agentsChip.el.dataset.pri = e.conn === "live" || e.conn === "connecting" ? 5 : 9.5;  // a degraded stream stays visible in the bar
     demoChip.el.hidden = !env.hasDemo; scheduleFit();

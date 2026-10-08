@@ -54,7 +54,14 @@ def env(tmp_path):
     data.mkdir()
     synth_daily(data / "SPY_1d.csv", "SPY", 1)
     synth_daily(data / "QQQ_1d.csv", "QQQ", 2)
-    paths = {"data_dir": data, "experiments_dir": tmp_path / "experiments", "imports_dir": tmp_path / "ibkr_exports",
+    docs = tmp_path / "docs"
+    docs.mkdir(exist_ok=True)
+    log = (ROOT / "docs" / "EXPERIMENT_LOG.md").read_text().rstrip("\n") + "\n"
+    for sid_, seed_, syms_ in [("D3_V3_c2_short", 123, ["SPY", "QQQ"]), ("D3_V1_c2_both", 20261008, ["SPY", "QQQ"]),
+                               ("D3_V1_c2_both", 20261008, ["SPY"]), ("D3_V2_c2_long", 20261008, ["SPY"])]:
+        log += f"| {sid_}@seed={seed_},symbols={'+'.join(sorted(syms_))} | 2026-10-08 | SYNTHETIC test registration | seed, symbols | tmp | REGISTERED, NOT RUN | |\n"
+    (docs / "EXPERIMENT_LOG.md").write_text(log)
+    paths = {"docs_dir": docs, "data_dir": data, "experiments_dir": tmp_path / "experiments", "imports_dir": tmp_path / "ibkr_exports",
              "test_log": tmp_path / "test_access_log.jsonl", "manifest": tmp_path / "no_manifest.json"}
     s = make_server(tmp_path / "events.sqlite3", port=0, token=TOKEN)
     s.research_paths = paths
@@ -198,7 +205,7 @@ def test_unregistered_and_unrunnable_strategies_refused(env):
 def test_unregistered_in_experiment_log_refused(env, tmp_path):
     srv, paths, tp = env
     docs = tp / "docs"
-    docs.mkdir()
+    docs.mkdir(exist_ok=True)
     (docs / "EXPERIMENT_LOG.md").write_text("| D3-V1 | x | y | none | z | NOT REGISTERED |\n")
     srv.research_paths["docs_dir"] = docs
     srv.__dict__.pop("_research_ctx", None)
@@ -569,3 +576,29 @@ def test_committed_reproduction_equals_committed_files(env):
     assert sum(r[4] for r in ser["rows"]) == committed["variants"]["D3_V3_c2_short"]["pooled"]["n"]
     st, tr = call(srv, "GET", "/api/runs/committed/committed:train:D3_V1_c2_both/trades?limit=3")
     assert st == 200 and tr["total"] == 471
+
+
+def test_deviating_run_must_be_registered_first(env):
+    """P4-01: any seed / symbol subset other than the pre-registered defaults is refused (422) unless a matching REGISTERED row exists."""
+    srv, paths, _ = env
+    base = {"strategy_id": "D3_V1_c2_both", "segment": "train"}
+    for extra in ({"seed": 7, "symbols": ["SPY", "QQQ"]}, {"symbols": ["QQQ"]}, {"symbols": ["SPY", "QQQ"], "seed": 99}):
+        st, r = call(srv, "POST", "/api/experiments", {**base, **extra})
+        assert st == 422 and r["code"] == "not_preregistered" and "Register first" in r["error"], (extra, r)
+        assert r["required_log_id"].startswith("D3_V1_c2_both@seed=")
+    out = [e for e in call(srv, "GET", "/api/research/audit")[1]["entries"] if e["outcome"] == "refused:not_preregistered"]
+    assert len(out) == 3                                     # refusals are audited
+    assert call(srv, "GET", "/api/experiments")[1]["experiments"] == []       # nothing queued
+    # register first, then run
+    log = paths["docs_dir"] / "EXPERIMENT_LOG.md"
+    log.write_text(log.read_text().rstrip("\n") + "\n| D3_V1_c2_both@seed=7,symbols=SPY | 2026-10-08 | SYNTHETIC | seed=7 | tmp | REGISTERED, NOT RUN | |\n")
+    st, r = call(srv, "POST", "/api/experiments", {**base, "seed": 7, "symbols": ["SPY"]})
+    assert st == 202 and r["experiment"]["params"]["deviation_registered"] is True
+    wait_done(srv, r["experiment"]["id"])
+    # a NOT REGISTERED row does not count; defaults need no row; cost scenario stays free
+    log.write_text(log.read_text().rstrip("\n") + "\n| D3_V1_c2_both@seed=8,symbols=SPY | x | x | x | x | NOT REGISTERED | |\n")
+    assert call(srv, "POST", "/api/experiments", {**base, "seed": 8, "symbols": ["SPY"]})[0] == 422
+    synth_daily(paths["data_dir"] / "IWM_1d.csv", "IWM", 3)           # full pre-registered universe now has data
+    st, r = call(srv, "POST", "/api/experiments", {**base, "cost_scenario": "x2"})
+    assert st == 202, r
+    wait_done(srv, r["experiment"]["id"])

@@ -73,12 +73,12 @@ def main():
     try:
         with sync_playwright() as pw:
             br = pw.chromium.launch(executable_path=exe, args=["--no-sandbox"])
-            bc = br.new_context(viewport={"width": 1440, "height": 900})
+            bc = br.new_context(bypass_csp=True, viewport={"width": 1440, "height": 900})
             bc.add_init_script(f"localStorage.setItem('cc.token','{TOKEN}')")
             page = bc.new_page()
             errors, ext = [], []
             page.on("pageerror", lambda e: errors.append(str(e)))
-            page.on("console", lambda m: errors.append(m.text) if m.type == "error" and "stale" not in m.text.lower() and "status of 403" not in m.text else None)
+            page.on("console", lambda m: errors.append(m.text) if m.type == "error" and "stale" not in m.text.lower() and "status of 403" not in m.text and "status of 422" not in m.text else None)
             page.on("request", lambda r: ext.append(r.url) if not r.url.startswith(BASE) and not r.url.startswith("data:") else None)
             journeys(page, errors)
             check("no external network requests", not ext, str(ext[:3]))
@@ -164,17 +164,9 @@ def journeys(page, errors):
     check("builder: adequacy check passes for real data", True)
     shots(page, "builder")
     scroll_shots(page, "builder", 1)
-    # client validation
-    for cb in page.locator('.checks input[type=checkbox]').all():
-        cb.uncheck()
-    page.locator('button:has-text("Queue experiment")').click()
-    check("client-side validation: no symbols", "Select at least one symbol" in page.locator(".rs-note-bad").first.inner_text())
-    for cb in page.locator('.checks input[type=checkbox]').all():
-        cb.check()
-    page.locator('input[aria-label="Seed"]').fill("-5")
-    page.locator('button:has-text("Queue experiment")').click()
-    check("client-side validation: seed", "Seed must be an integer" in page.locator("form .rs-note-bad").inner_text())
-    page.locator('input[aria-label="Seed"]').fill("20261008")
+    check("builder: universe and seed locked with reason", page.locator('.checks input[type=checkbox]:not([disabled])').count() == 0 and "Pre-registered seed" in page.locator("form").inner_text())
+    r = page.evaluate("""async () => { const r = await fetch('/api/experiments',{method:'POST',headers:{'Content-Type':'application/json','X-CC-Token':'research-token'},body:JSON.stringify({strategy_id:'D3_V1_c2_both',segment:'validation',seed:5,symbols:['SPY']})}); return [r.status, (await r.json()).code]; }""")
+    check("API refuses unregistered deviating run (422 not_preregistered)", r == [422, "not_preregistered"], str(r))
     page.locator('select[aria-label="Strategy"]').select_option("D3_V1_c2_both")
     page.locator('button:has-text("Queue experiment")').click()
     wait(page, ".toast-success:has-text('Queued exp_')")

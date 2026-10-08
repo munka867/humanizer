@@ -285,3 +285,10 @@ def get_audit(h, m, q, body):
         rows = st._db.execute(sql, args).fetchall()
     items = [{"seq": r[0], "event_id": r[1], "timestamp_utc": r[2], "run_id": r[3], "source": r[4], **json.loads(r[5])} for r in rows]
     h._json(200, {"ok": True, "items": items, "next_before_seq": items[-1]["seq"] if len(items) == limit else None})
+
+
+@router.route("GET", r"/api/auth/check")
+def auth_check(h, m, q, body):
+    """Reports whether the X-CC-Token header sent with this request is valid (no side effects)."""
+    supplied = bool(h.headers.get("X-CC-Token"))
+    return h._json(200, {"ok": True, "token_supplied": supplied, "token_valid": bool(supplied and h._token_ok())})

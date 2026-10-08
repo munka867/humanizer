@@ -96,7 +96,7 @@ def main():
     try:
         with sync_playwright() as p:
             b = p.chromium.launch(executable_path=exe, args=["--no-sandbox"]) if exe else p.chromium.launch(args=["--no-sandbox"])
-            ctx = b.new_context(viewport={"width": 1440, "height": 900})
+            ctx = b.new_context(bypass_csp=True, viewport={"width": 1440, "height": 900})
             ctx.add_init_script(f"try{{localStorage.setItem('cc.token','{TOKEN}')}}catch(e){{}}")
             page = ctx.new_page()
             page.on("console", lambda m: console_errors.append(m.text) if m.type == "error" else None)
@@ -245,6 +245,7 @@ def run(page, sym0, sym1, shots, api_market, real):
         page.reload(); page.wait_for_selector(".mk-canvas[data-ready='1']")
         page.select_option(".mk-wm select[aria-label='Watchlist']", label=None, index=1) if page.locator(".mk-wm select option").count() > 1 else None
         page.wait_for_selector(".mk-wm tr.tbl-row")
+        page.wait_for_function("[...document.querySelectorAll('.mk-wm select option')].some(o => o.textContent.startsWith('Verify list'))")
         names = page.eval_on_selector_all(".mk-wm select option", "os => os.map(o => o.textContent)")
         check("list persisted after reload (server side)", any(n.startswith("Verify list") for n in names), str(names))
         sel = page.eval_on_selector(".mk-wm select[aria-label='Watchlist']", "s => s.selectedOptions[0].textContent")
@@ -254,6 +255,7 @@ def run(page, sym0, sym1, shots, api_market, real):
         page.click(f"button[aria-label^='Remove {sym1}']")
         page.wait_for_function("document.querySelectorAll('.mk-wm tr.tbl-row').length === 1")
         page.reload(); page.wait_for_selector(".mk-wm select")
+        page.wait_for_function("[...document.querySelectorAll('.mk-wm select option')].some(o => o.textContent.startsWith('Verify list'))")
         names = page.eval_on_selector_all(".mk-wm select option", "os => os.map(o => o.textContent)")
         page.select_option(".mk-wm select[aria-label='Watchlist']", label=[n for n in names if n.startswith("Verify list")][0]); page.wait_for_timeout(400)
         check("remove persisted after reload", len(order()) == 1)

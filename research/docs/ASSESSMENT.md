@@ -31,3 +31,11 @@ DAILY_SPEC v1 on the first 80% of the data after an independent audit (docs/REVI
 - Final test segment: NOT touched and NOT spent. Not run for a rejected primary; running V3 alone would be post-hoc.
 - Intraday MES hypotheses (H1, H2) remain untested for lack of data.
 Overall status: no credible edge found so far; inconclusive for everything not yet testable.
+
+## Update 2026-10-14 — trend strategies on SPY/QQQ/IWM (DAILY_SPEC2, train+validation only)
+Three simple long-only trend rules (above SMA200; SMA50 over SMA200; 100-day high breakout / 50-day low exit) were pre-registered, run on the first 80% of the data
+and checked by an independent loop re-implementation (matches to 9e-16; audit: 0 high, 0 medium, 3 low).
+- All three are INCONCLUSIVE under the pre-registered rule. Each gave up return versus buy-and-hold in every segment; each cut max drawdown (12-15% in train, 31-55% in validation).
+- The drawdown cut is about what random on/off timing with the same time in market would give, and the sample is one rising market with 0-4 round trips per ETF per segment. No edge is shown;
+  protection in a real bear market is untested.
+- Sealed final-test period: untouched. Trial count: 19 of 24. Data refresh 2026-10-14: 0 revisions in 995 overlapping days; 5 forward days observed only.

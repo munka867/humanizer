@@ -16,3 +16,6 @@
   recoverable via `git show 8bcce96:research/results/test_access_log.jsonl`. Fix: tests/verify scripts must redirect the ledger
   (CC_TEST_ACCESS_LOG), and workers must not delete audit files; a real ledger, if created, must never be removed.
 - D11 2026-10-08 Core fix: ctx.fmt.num accepted only a number; it now also accepts {dp} (table column formatters passed an options object).
+- D12 2026-10-14 Windows setup gap: Python needs the tzdata package on Windows (added to requirements, friendly start-up check); optional packages (pandas/numpy/pyyaml) now give a clear 503 message.
+- D13 2026-10-14 Repository confirmed PUBLIC. Market data, account data and new snapshots are git-ignored; screenshots show delayed ETF prices. User advised how to make it private.
+- D14 2026-10-14 Data refresh kept as a separate snapshot (dataset B); frozen dataset A and its split are unchanged so the sealed test window is not shifted.

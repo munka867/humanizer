@@ -352,3 +352,73 @@ which loads every workspace with the CSP enforced and fails on any violation), P
 the token with GET /api/auth/check), P4-10 (chip relabelled 'Event stream live').
 Still open / accepted: P4-02 (event/audit/ledger writes are spoofable by anyone holding the token; single-user local tool), P4-11 (no socket timeouts, SSE client cap or quotas), and the
 Bonferroni/DSR variant count is not auto-updated for accepted deviating runs (the count of 16 is manual until a variant ledger is wired to the stats).
+
+---
+
+# Trend strategies audit (phase 5)
+
+Scope: `docs/DAILY_SPEC2.md` (read first, alone), then `src/tradelab/daily_trend/*`, `scripts/run_trend.py`, `configs/trend_*.yaml`, `results/trend/*`, `docs/TREND_RESULTS.md`.
+Order of work: (1) independent loop-based oracle written from the spec text before any worker code was read (`tests/oracle_trend.py`, `tests/oracle_trend_run.py`: plain Python lists and
+`csv`, nothing shared with the worker), (2) hand-computed micro-case tests, (3) only then the worker's code and results. Rules observed: performance was computed only on dataset A
+truncated strictly before the sealed start (rows at/after 2025-12-20 are skipped before their prices are parsed, `oracle_trend.load`); dataset B was used only for the equality check and
+the 5 forward days; no raw prices printed; no broker tools; no test segment run.
+Tests: `tests/test_review_trend_oracle.py` (14 pass), `tests/test_review_trend_compare.py` (18 pass, 1 strict xfail).
+
+Severity count: **HIGH 0, MEDIUM 0, LOW 3, INFO 6.** No bug found in signals, accounting, costs, segmenting, bootstrap, null, forward observation or the label.
+
+## Do the independent numbers match? Yes, to machine precision
+* Worker library vs oracle, all 3 variants x {train, validation} x {purge on, purge off} x {SPY, QQQ, IWM, pooled}: total return, B_H total, max drawdown, B_H max drawdown, drawdown reduction,
+  annualised vol, time in market, number of days, switches and buys agree to 1e-9 (worst absolute difference 9e-16; `test_worker_matches_oracle`, 12 parametrised cases).
+* The committed `results/trend/{train,validation}_summary.json` (the numbers in `docs/TREND_RESULTS.md`) vs the oracle: same, worst difference 9e-16, no mismatch; last evaluated date 2025-12-19.
+* Forward observation (dataset B, 5 days 2026-10-08..14): oracle on A+new rows equals the worker's positions and returns exactly (difference 0). Dataset B equals A on all 995 overlapping bars
+  (B is a rolling 1000-bar window, so it drops A's five oldest bars and adds five new ones; no revisions).
+* Pooled sanity (train / validation): V1 21.50% vs B_H 22.23% (DD reduction 13.8%) / 16.07% vs 22.89% (54.8%); V2 16.37% / 7.64% vs the same B_H (12.4% / 31.2%); V3 8.73% vs 43.96% (15.3%) / 7.12% vs 22.89% (54.9%).
+* Label: all three are INCONCLUSIVE under the pre-registered rule (REJECTED needs total < B_H AND DD reduction < 25% in BOTH segments; validation DD reduction is 31-55% in every variant). I derived this
+  from my numbers before reading `verdict.md`; it agrees, and `test_verdict_truth_table_matches_preregistered_rule` covers the rule's edge cases. The label does not depend on the purge convention
+  (V2 validation DD reduction 31.2% with purge, 26.9% without; both >= 25%, but note V2 is the variant closest to the line).
+
+## Interpretation choices where the spec is silent (both implementations resolved them the same way; flagged, not bugs)
+common start date per variant and segment across the three ETFs (SPY has one extra early bar, so per-ETF rows on its own dates would differ by one day: SPY train V1 total 22.26% vs 22.23%);
+3-day purge applied by dropping the first 3 calendar days after the train/validation boundary; B_H restarted (one buy cost) at each segment's first eligible open; round trips = sells
+(buys shown separately; I counted buys, and the table header says "sells (round trips)"); vol with ddof 1; first held day = bar after the first signal (index 200 for V1/V2, 101 for V3); cash 0%, price return only.
+
+## Findings
+
+### P5-01 INFO - segment B_H pays a buy cost that a carried strategy position does not
+`analysis.py:window`. In validation B_H is a fresh buy at the first validation open (one cost, about 1.5-2 bp) while a strategy already long from train continues without a trade. Magnitude ~0.02 pp of return; no label effect.
+Forward days use "held since before: no buy cost" for B_H (`forward.py`), a different convention again. Fix: state the convention in the spec or give both B_H variants.
+
+### P5-02 LOW - the B_R null is thin and ignores cross-ETF structure
+`analysis.py:shuffle_runs/random_timing_null`. (a) With few runs the null has few distinct series: a per-ETF structure of 3 on-runs and 2 off-runs allows at most 3! x 2! = 12 arrangements (`test_null_has_few_distinct_arrangements_for_short_run_structures`),
+and several ETFs have 0-4 switches, so the 10,000 draws are mostly ties and a "pct" printed to three decimals (0.949, 0.957) is false precision. (b) Each ETF is shuffled independently, so the pooled null forgets that the three ETFs
+trend together. A joint-timing null (one common circular shift applied to all ETFs' own on/off vectors) has a pooled total-return sd of 4.3% (train) and 7.0% (validation) for V1, against 2.5% and 2.7% for the independent shuffle (my loop
+re-implementation of the independent null reproduces the worker's mean/sd/p95 within Monte Carlo error: SPY train mean 26.2% sd 2.5%, p95 30.1% in both). Same direction as D-01 in the daily audit: p95 flags are over-confident.
+No label effect (the spec says the null does not change the label) and no scope reports beating p95 in a way the text over-claims, but treat the 'pct' column as indicative only. Fix: report the number of distinct arrangements and use a joint null.
+
+### P5-03 LOW - pooled scope has no switch / round-trip counts
+`scripts/run_trend.py:69-71` pops buys/sells/switches for the pooled scope and the report prints n/a, while the spec asks for switches and round trips per segment, per ETF "and pooled". Per-ETF counts are present and correct (equal to mine).
+Reproducer: `test_pooled_scope_reports_switch_counts` (strict xfail). Fix: report the sum over ETFs (or the average) and say which.
+
+### P5-04 LOW - bootstrap p-value is a non-standard formula
+`analysis.py:bootstrap_mean_diff`: `p = min(1, 2*min(P(mean*<=0), P(mean*>=0)) + 1/(n+1))` on the UNcentred bootstrap distribution, then x19 for "Bonf p". It is a reasonable sign-probability but not a calibrated test, and the +1/(n+1) is added after doubling.
+The CIs themselves are right: my independent moving-block bootstrap (block 10, 20,000 resamples) gives V1 pooled difference CI [-2.63, 1.44] bps (train) and [-15.85, 9.56] bps (validation) vs the worker's [-2.59, 1.51] and [-15.83, 9.32]. The columns are informational and do not drive the label, as documented.
+
+### P5-05 INFO - sealed window
+`run_trend.py:setup/truncate_before` drops every bar at/after `split.test[0]` before any frame is built (assert on the max index); `--segment test` returns exit 2 (tested: `test_script_refuses_test_segment`, `test_nothing_at_or_after_sealed_start_survives_truncation`);
+the committed JSON ends 2025-12-19. The forward module needs the sealed-period closes as indicator inputs and runs the Donchian state machine through them, so the five forward POSITIONS carry information about the sealed path, but no
+return for any sealed date is computed or printed (returns are taken from the last 5 rows only). Acceptable under the stated rule; it should be said that the forward positions are not independent of the sealed window.
+
+### P5-06 INFO - look-ahead and accounting verified
+Signals at row t use closes <= t only (prefix test with garbage after t, all three rules; `test_signals_use_no_future_bars`), position during day t is the signal at t-1 (`positions`), and the four cases are right: hold = close/close, buy = close/open - cost (overnight gap not earned),
+sell = open/prev_close - cost (intraday move not earned), flat = 0 (hand cases in `test_case_*`). Cost is charged only on the buy day and the sell day, on that day's open, 1 bp + 0.5 cent/open + 0.35 bp. Donchian windows exclude today (t-100..t-1 and t-50..t-1) and a close equal to the
+channel does not trigger. Warm-up: the first signal exists at bar 199 (V1/V2) / 100 (V3) and the first held day is the next bar; before it the strategy is in cash and not evaluated.
+
+### P5-07 INFO - cash and dividends bias in opposite directions
+Cash earns 0% in a period with positive short rates (penalises time out of market) and dividends are omitted for strategies and B_H alike (penalises B_H more, since it is always invested). Neither is quantified here; the first favours B_H, the second favours the strategies.
+
+### P5-08 INFO - what the label means
+INCONCLUSIVE here is "not rejected under a deliberately narrow rule", not support. The rule rejects only if a strategy loses on return AND fails to cut drawdown by 25% in both segments; in this sample every pooled segment shows lower total return than B_H (six of six), so the only thing that kept each variant from REJECTED was the single April-2025 drawdown episode inside validation.
+
+## Plain reading of what these results can and cannot show
+They show, descriptively and reproducibly (two independent implementations agree), that in 2023-2025 simple long-only trend filters on SPY/QQQ/IWM gave up return relative to buy-and-hold in every pooled segment (V1 by about 0.7 pp in train and 6.8 pp in validation, V2 by 5.9 / 15.3 pp, V3 by 35 / 16 pp) and cut the maximum drawdown by 12-15% in train and 31-55% in validation; costs are irrelevant at this trading frequency (x2 costs moves totals by under 0.1 pp). They cannot show that any rule has an edge or will protect capital in a future bear market:
+the sample is one rising regime with one sharp but short drawdown, each ETF has 0-4 round trips per segment, the three ETFs are highly correlated so the pooled series is not three independent trials, the validation drawdown benefit rests on a single episode, the sealed period is untouched and unknown, and the five forward days carry no inference.

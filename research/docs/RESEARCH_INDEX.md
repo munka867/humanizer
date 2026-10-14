@@ -7,3 +7,4 @@
 | H3 | daily candle-2 closure bias | same transcripts | DAILY_SPEC.md v1 | in progress (train/val only) | see DAILY_RESULTS.md when written |
 Method notes: DeltaTrend jGhk-uSrtII (Monte Carlo) — docs/HYPOTHESES_TTRADES.md.
 Ledger of every variant: docs/EXPERIMENT_LOG.md (16 of 24 budget registered).
+| H4 | long-only trend filters (SMA200, SMA50/200, Donchian 100/50) | standard published ideas, not the channels | DAILY_SPEC2.md v1 | INCONCLUSIVE (train+val), audited | docs/TREND_RESULTS.md |

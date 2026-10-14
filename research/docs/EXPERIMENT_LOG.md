@@ -33,3 +33,7 @@ Variants registered so far: 13 intraday + 3 daily = 16 of 24 budget.
 | D4-V3 | 2026-10-14 | Donchian: enter close > 100-day high close, exit < 50-day low close | none | same | REGISTERED, NOT RUN | |
 | D4-B0 | 2026-10-14 | Baselines B_H buy&hold and B_R random-timing null (run-length shuffle) | seed 20261014 | same | REGISTERED, NOT RUN | |
 Variants registered so far: 13 intraday + 3 daily + 3 trend = 19 of 24 budget. Dataset refresh 2026-10-14 (MANIFEST_20261014.json): no revisions in 995 overlapping days; 5 new bars kept as forward observation only.
+| D4-V1 result | 2026-10-14 | train+validation run (TREND_RESULTS.md), test sealed | none | train eligible 2023-08..2025-03-03, val 2025-03-07..2025-12-19 | RUN | pooled total vs B_H: train +21.5% vs +22.2% (DDred 14%), val +16.1% vs +22.9% (DDred 55%); INCONCLUSIVE |
+| D4-V2 result | 2026-10-14 | same | none | same | RUN | train +16.4% vs +22.2% (DDred 12%), val +7.6% vs +22.9% (DDred 31%); INCONCLUSIVE |
+| D4-V3 result | 2026-10-14 | same | none | train eligible 2023-03..2025-03-03 | RUN | train +8.7% vs +44.0% (DDred 15%), val +7.1% vs +22.9% (DDred 55%); INCONCLUSIVE |
+| D4-B0 result | 2026-10-14 | B_H and B_R (seed 20261014) | seed 20261014 | same | RUN | no total-return percentile reaches 0.95 (only V1 IWM train MDD 0.957); details in TREND_RESULTS.md. Forward 5 days (10-08..10-14) reported separately, no inference |

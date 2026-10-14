@@ -1,0 +1,16 @@
+# DAILY_SPEC2 v1 (pre-registered 2026-10-14). Windows are fixed; nothing here may be tuned.
+spec: DAILY_SPEC2_v1
+universe: [SPY, QQQ, IWM]
+data_dir_A: data/processed
+data_dir_B: data/processed_20261014     # forward observation ONLY (5 days after 2026-10-07)
+variants:
+  D4_V1_sma200:   {kind: sma200}
+  D4_V2_cross:    {kind: cross, fast: 50, slow: 200}
+  D4_V3_donchian: {kind: donchian, entry: 100, exit: 50}
+split: {fractions: [0.6, 0.2, 0.2], purge_days: 3}
+seed: 20261014
+bootstrap: {blocks: [10, 5, 20], n_resamples: 5000}
+b_r_null: {n_draws: 10000}
+mc: {blocks: [10, 5, 20], n_paths: 5000, dd_thresholds: [0.15, 0.25]}
+n_variants_registered_overall: 19
+reject_dd_reduction_below: 0.25

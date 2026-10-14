@@ -1,0 +1,9 @@
+# Cost ASSUMPTIONS for D4 trend strategies (DAILY_SPEC2). Unverified; stress x1, x1.5, x2.
+# cost per buy or sell as fraction of notional = mult * (slippage_bps*1e-4 + half_spread_usd/open_price + commission_usd/position_usd)
+base:
+  slippage_bps: 1.0
+  half_spread_usd: 0.005       # 0.5 cent / open price
+  commission_usd: 0.35         # on a 10,000 USD position = 0.35 bp
+  position_usd: 10000.0
+scenarios: {x1: 1.0, x1_5: 1.5, x2: 2.0}
+# Not modelled: taxes, CAD/USD FX, dividends (price return only), T-bill interest on cash (cash earns 0%).

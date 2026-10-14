@@ -63,3 +63,65 @@ def test_worker_matches_oracle(world, v, seg, purge):
         if s != "POOLED":
             assert t["switches"] == m["switches"], (s, "switches")
             assert t["buys"] == m["round_trips"], (s, "buys")
+
+
+# ---------------------------------------------------------------- audit of the worker's inference helpers (synthetic inputs)
+def test_run_length_shuffle_preserves_time_in_market_switches_first_state():
+    rng = np.random.default_rng(1)
+    for p in ([1, 1, 0, 0, 0, 1, 0, 1, 1, 1, 0], [0, 0, 1, 1, 0, 0, 0, 1], [1] * 6, [0] * 4 + [1] * 3):
+        p = np.array(p)
+        f, on, off = AN.run_structure(p)
+        for _ in range(300):
+            q = AN.shuffle_runs(f, on, off, rng)
+            assert len(q) == len(p) and q.sum() == p.sum() and q[0] == p[0] and (np.diff(q) != 0).sum() == (np.diff(p) != 0).sum()
+
+
+def test_moving_block_indices_are_contiguous_and_in_range():
+    idx = AN.block_indices(23, 10, 50, np.random.default_rng(0))
+    assert idx.shape == (50, 23) and idx.min() >= 0 and idx.max() < 23
+    assert (np.diff(idx[:, :10], axis=1) == 1).all()
+
+
+def test_verdict_truth_table_matches_preregistered_rule():
+    m = lambda tot, bh, red: {"total": tot, "total_bh": bh, "dd_reduction": red}
+    bad = m(0.10, 0.20, 0.10)
+    assert AN.verdict({"train": bad, "validation": bad})[0] == "REJECTED"
+    assert AN.verdict({"train": bad, "validation": m(0.10, 0.20, 0.30)})[0] == "INCONCLUSIVE"       # DD reduction >= 25% in one segment
+    assert AN.verdict({"train": bad, "validation": m(0.25, 0.20, 0.10)})[0] == "INCONCLUSIVE"       # beat B_H in one segment
+    assert AN.verdict({"train": bad, "validation": m(0.10, 0.20, float("nan"))})[0] == "INCONCLUSIVE"
+    assert AN.verdict({"train": bad, "validation": bad})[0] != "SUITABLE"
+
+
+def test_null_has_few_distinct_arrangements_for_short_run_structures():
+    """Documents P5-02: with 3 on-runs / 2 off-runs the shuffle null has at most 3! x 2! = 12 distinct series per ETF, so a 10,000-draw
+    'percentile' printed to 3 decimals is far more precise than the null supports."""
+    rng = np.random.default_rng(0)
+    p = np.array([1] * 20 + [0] * 5 + [1] * 30 + [0] * 7 + [1] * 10)
+    f, on, off = AN.run_structure(p)
+    distinct = {tuple(AN.shuffle_runs(f, on, off, rng)) for _ in range(2000)}
+    assert len(distinct) <= 12
+
+
+def test_script_refuses_test_segment():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("rt", ROOT / "scripts" / "run_trend.py")
+    rt = importlib.util.module_from_spec(spec); spec.loader.exec_module(rt)
+    assert rt.main(["--segment", "test"]) == 2
+
+
+def test_nothing_at_or_after_sealed_start_survives_truncation(world):
+    sp, bars = world
+    assert all(b.index.max() < sp.test[0] for b in bars.values())
+
+
+@pytest.mark.xfail(strict=True, reason="P5-03: pooled scope reports no switch / round-trip counts (spec: 'per segment, per ETF and pooled')")
+def test_pooled_scope_reports_switch_counts():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("rt", ROOT / "scripts" / "run_trend.py")
+    rt = importlib.util.module_from_spec(spec); spec.loader.exec_module(rt)
+    cfg = rt.load_cfg()
+    cfg["b_r_null"]["n_draws"] = 50; cfg["bootstrap"].update(blocks=[10], n_resamples=100); cfg["mc"].update(blocks=[10], n_paths=50)
+    cfg["variants"] = {"D4_V1_sma200": cfg["variants"]["D4_V1_sma200"]}
+    costs, scen, bars, split, bounds = rt.setup(cfg)
+    res = rt.analyse_segment("validation", cfg, costs, scen, bars, bounds)
+    assert "switches" in res["variants"]["D4_V1_sma200"]["scopes"]["pooled"]

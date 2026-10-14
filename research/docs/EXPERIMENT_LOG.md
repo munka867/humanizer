@@ -28,3 +28,8 @@ Variants registered so far: 13 intraday + 3 daily = 16 of 24 budget.
 | D3-V2 result | 2026-10-08 | same | none | same | RUN (train, validation) | train EV -$18.43 n=236; val -$4.76 n=76; verdict REJECTED |
 | D3-V3 result | 2026-10-08 | same | none | same | RUN (train, validation) | train +$7.84 n=235 (B_D1 p=0.022); val +$8.57 n=76 CI [-43.4,53.5], B_D1 p=0.082; verdict INCONCLUSIVE |
 | D3-B0 result | 2026-10-08 | baselines | seed 20261008 | same | RUN (train, validation) | B_D0 pooled EV -$1.51 (train), +$4.86 (val) per $10k trade; B_D1 in DAILY_RESULTS.md |
+| D4-V1 | 2026-10-14 | Trend: long if close > SMA200 (DAILY_SPEC2 v1) | none | SPY,QQQ,IWM dataset A, train+validation | REGISTERED, NOT RUN | |
+| D4-V2 | 2026-10-14 | Trend: SMA50 > SMA200 | none | same | REGISTERED, NOT RUN | |
+| D4-V3 | 2026-10-14 | Donchian: enter close > 100-day high close, exit < 50-day low close | none | same | REGISTERED, NOT RUN | |
+| D4-B0 | 2026-10-14 | Baselines B_H buy&hold and B_R random-timing null (run-length shuffle) | seed 20261014 | same | REGISTERED, NOT RUN | |
+Variants registered so far: 13 intraday + 3 daily + 3 trend = 19 of 24 budget. Dataset refresh 2026-10-14 (MANIFEST_20261014.json): no revisions in 995 overlapping days; 5 new bars kept as forward observation only.

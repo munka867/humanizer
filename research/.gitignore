@@ -13,3 +13,5 @@ data/processed/
 data/raw/ibkr_exports/
 results/experiments/
 command_center/data/research.sqlite3*
+data/processed_*/
+!data/raw/ibkr_connector/MANIFEST_*.json

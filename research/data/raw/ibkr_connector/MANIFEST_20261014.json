@@ -1,0 +1,50 @@
+[
+ {
+  "symbol": "SPY",
+  "contract_id": 756733,
+  "exchange": "ARCA",
+  "raw_file": "data/raw/ibkr_connector/SPY_1d_96dfeafbee11.json",
+  "sha256": "96dfeafbee113e2895c9c68df78337008c4e4b3fe549c8a6d9823af8677be692",
+  "n_bars": 1000,
+  "first": "2022-10-19 13:30:00+00:00",
+  "last": "2026-10-14 13:30:00+00:00",
+  "retrieved_on": "2026-10-14",
+  "source_tag": "Last",
+  "delayed_seconds": 900,
+  "chart_step_s": 86400,
+  "adjusted_for_dividends": false,
+  "processed_file": "data/processed_20261014/SPY_1d.csv"
+ },
+ {
+  "symbol": "QQQ",
+  "contract_id": 320227571,
+  "exchange": "NASDAQ",
+  "raw_file": "data/raw/ibkr_connector/QQQ_1d_52c75629c399.json",
+  "sha256": "52c75629c3997ab25d2083f9e7e6bf3542142d0b373ddcca1d1aa6e2f2cd788a",
+  "n_bars": 1000,
+  "first": "2022-10-19 13:30:00+00:00",
+  "last": "2026-10-14 13:30:00+00:00",
+  "retrieved_on": "2026-10-14",
+  "source_tag": "Last",
+  "delayed_seconds": 900,
+  "chart_step_s": 86400,
+  "adjusted_for_dividends": false,
+  "processed_file": "data/processed_20261014/QQQ_1d.csv"
+ },
+ {
+  "symbol": "IWM",
+  "contract_id": 9579970,
+  "exchange": "ARCA",
+  "raw_file": "data/raw/ibkr_connector/IWM_1d_877753864180.json",
+  "sha256": "877753864180ca4411476a7b765ac1f5a5a185e3fae46b162ed8366374505f58",
+  "n_bars": 1000,
+  "first": "2022-10-19 13:30:00+00:00",
+  "last": "2026-10-14 13:30:00+00:00",
+  "retrieved_on": "2026-10-14",
+  "source_tag": "Last",
+  "delayed_seconds": 900,
+  "chart_step_s": 86400,
+  "adjusted_for_dividends": false,
+  "processed_file": "data/processed_20261014/IWM_1d.csv"
+ }
+]

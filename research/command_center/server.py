@@ -335,7 +335,16 @@ def make_server(db_path, host="127.0.0.1", port=8765, token=None, **kw) -> CCSer
     return CCServer((host, port), Store(db_path), token or secrets.token_urlsafe(16), **kw)
 
 
+def _check_timezone_data():
+    try:
+        from zoneinfo import ZoneInfo
+        ZoneInfo("America/New_York")
+    except Exception:
+        raise SystemExit("Missing time-zone data (common on Windows). Fix: python -m pip install tzdata   then start the server again.")
+
+
 def main(argv=None):
+    _check_timezone_data()
     ap = argparse.ArgumentParser(description="Research command centre (local only; no trading capability)")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=int(os.environ.get("CC_PORT", 8765)))

@@ -106,6 +106,10 @@ def handler(fn):
             return h._json(e.status, clean({"ok": False, "error": e.message, **e.extra}))
         except (ValueError, KeyError, TypeError) as e:
             return h._json(400, {"ok": False, "error": f"invalid request: {type(e).__name__}"})
+        except ModuleNotFoundError as e:
+            pkg = (e.name or "a package").split(".")[0]
+            return h._json(503, {"ok": False, "error": f"this feature needs the Python package '{pkg}', which is not installed",
+                                 "missing_module": pkg, "fix": "python -m pip install pandas numpy pyyaml tzdata"})
         except Exception as e:  # pragma: no cover - last resort
             if os.environ.get("CC_DEBUG"):
                 import traceback

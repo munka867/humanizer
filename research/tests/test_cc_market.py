@@ -340,11 +340,28 @@ BROKER_MODS = {"ib_insync", "ib_async", "ibapi", "ibkr", "alpaca", "alpaca_trade
 
 
 def test_no_broker_imports():
-    for f in (ROOT / "command_center").glob("*.py"):
-        for n in ast.walk(ast.parse(f.read_text())):
-            names = [a.name for a in n.names] if isinstance(n, ast.Import) else [n.module or ""] if isinstance(n, ast.ImportFrom) else []
-            for nm in names:
-                assert nm.split(".")[0].lower() not in BROKER_MODS, f"{f.name} imports {nm}"
+    banned = ("ibapi", "ib_insync", "ccxt", "alpaca", "tradier", "oandapyv20", "robin_stocks", "futu", "tda")
+    files = [f for f in CC.rglob("*.py") if "static" not in f.parts]
+    assert files
+    for f in files:
+        in_adapter = "ibkr" in f.relative_to(CC).parts[:-1] or f.name == "api_ibkr.py"   # the read-only data adapter package (+ its API module)
+        tree = ast.parse(f.read_text())
+        for n in ast.walk(tree):
+            if isinstance(n, ast.Import):
+                mods = [a.name for a in n.names]
+            elif isinstance(n, ast.ImportFrom):
+                mods = [n.module or ""] if not n.level else []      # relative imports are our own modules
+            else:
+                continue
+            for m in mods:
+                top = m.split(".")[0].lower()
+                assert not any(top.startswith(b) for b in banned), f"{f.name} imports {m}"
+                if top.startswith("ib_async") or top == "ibkr":
+                    assert f.parent.name == "ibkr" and f.name == "readonly_client.py", f"{f.name} imports {m}: ib_async is allowed only inside command_center/ibkr/readonly_client.py"
+                # the dashboard stays read-only: it never imports the execution core or the order-capable broker adapter
+                assert not m.startswith(("tradelab.execution", "tradelab.brokers")), f"{f.name} imports {m}"
+                assert not (in_adapter is False and "execution" in m.split(".") and m.startswith("tradelab")), f"{f.name} imports {m}"
+
 
 
 def test_no_order_endpoints_registered(srv):

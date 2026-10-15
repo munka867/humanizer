@@ -141,18 +141,31 @@ def test_search_and_runs(tmp_path):
 
 
 def test_no_broker_imports():
-    banned = ("ibapi", "ib_insync", "ib_async", "ibkr", "ccxt", "alpaca", "tradier", "oandapyv20", "robin_stocks", "futu", "tda")
-    files = list(CC.glob("*.py"))
+    banned = ("ibapi", "ib_insync", "ccxt", "alpaca", "tradier", "oandapyv20", "robin_stocks", "futu", "tda")
+    files = [f for f in CC.rglob("*.py") if "static" not in f.parts]
     assert files
     for f in files:
+        in_adapter = "ibkr" in f.relative_to(CC).parts[:-1] or f.name == "api_ibkr.py"   # the read-only data adapter package (+ its API module)
         tree = ast.parse(f.read_text())
         for n in ast.walk(tree):
-            mods = [a.name for a in n.names] if isinstance(n, ast.Import) else [n.module or ""] if isinstance(n, ast.ImportFrom) else []
+            if isinstance(n, ast.Import):
+                mods = [a.name for a in n.names]
+            elif isinstance(n, ast.ImportFrom):
+                mods = [n.module or ""] if not n.level else []      # relative imports are our own modules
+            else:
+                continue
             for m in mods:
-                assert not any(m.split(".")[0].lower().startswith(b) for b in banned), f"{f.name} imports {m}"
+                top = m.split(".")[0].lower()
+                assert not any(top.startswith(b) for b in banned), f"{f.name} imports {m}"
+                if top.startswith("ib_async") or top == "ibkr":
+                    assert f.parent.name == "ibkr" and f.name == "readonly_client.py", f"{f.name} imports {m}: ib_async is allowed only inside command_center/ibkr/readonly_client.py"
+                # the dashboard stays read-only: it never imports the execution core or the order-capable broker adapter
+                assert not m.startswith(("tradelab.execution", "tradelab.brokers")), f"{f.name} imports {m}"
+                assert not (in_adapter is False and "execution" in m.split(".") and m.startswith("tradelab")), f"{f.name} imports {m}"
     for f in (CC / "static").glob("*.js"):
         txt = f.read_text()
         assert "https://" not in txt.replace("https?://", "") and "cdn" not in txt.lower()
+
 
 
 def test_completed_count_rule(tmp_path):

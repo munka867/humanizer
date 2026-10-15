@@ -5,7 +5,7 @@
 **Bottom line: nothing has ever touched a real or paper broker. A real paper pilot has not been run. The user's IBKR account is unfunded, and IBKR states a paper account requires an approved and funded live account (D15). No strategy in this project has shown positive net expectancy (docs/DAILY_RESULTS.md, docs/TREND_RESULTS.md), so there is nothing worth trading yet.**
 
 ## Local tests (simulated broker, deterministic) - `python -m pytest tests/test_exec_*.py -q`
-Run on 2026-10-15: **90 passed** (see the final report for the exact line). These prove the machinery's logic against scripted faults; they do not prove behaviour against IBKR.
+Run on 2026-10-15: tests/test_exec_*.py **90 passed**; tests/test_paper_*.py **99 passed** (fake ib_async only); full suite **788 passed, 1 skipped, 3 xfailed**. These prove the machinery's logic against scripted faults; they do not prove behaviour against IBKR.
 
 | area | implemented | tested vs simulated broker |
 |---|---|---|

@@ -43,6 +43,17 @@ $env:CC_APPROVAL_KEY = "your secret phrase here"
 ```
 (Closing the window forgets it. That is intended.)
 
+## 4b. Tell Python where the project code is (every new window)
+The commands below start with `python -m tradelab...`, which only works if Python is told to look in the project's `src` folder. In the same window,
+from the `research` folder, run ONE of these (the first for PowerShell, the second for the older black Command Prompt):
+```
+$env:PYTHONPATH = "src"
+```
+```
+set PYTHONPATH=src
+```
+Without this you will see "No module named 'tradelab'". (The dashboard and the doctor, `python -m command_center...`, do not need it.)
+
 ## 5. Create the signed approval (you run this, not the assistant)
 From the `research` folder, with the key set in the same window:
 ```

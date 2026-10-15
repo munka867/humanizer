@@ -16,3 +16,5 @@ command_center/data/research.sqlite3*
 data/processed_*/
 !data/raw/ibkr_connector/MANIFEST_*.json
 data/fake_*/
+configs/approvals/paper_approval.json
+configs/approvals/*.json

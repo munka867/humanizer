@@ -13,11 +13,13 @@ Do not optimise for an impressive backtest.
   must be labelled `SYNTHETIC` in filename and metadata, and is used ONLY to test software.
 - YouTube channels (@deltatrendtrading, @TTrades_edu) are hypothesis sources. Transcripts are read via the
   Firecrawl youtube/read capability (no charts/visuals). Record exactly what was accessed in docs/SOURCES.md.
-- IBKR connector (user authorisation, updated 2026-10-08): READ-ONLY account and market data are allowed; the connected
-  account is a brand-new, empty account. PAPER trading is allowed in principle but only through an approved broker
-  adapter + deterministic risk engine that do not exist yet; the connector's order-instruction tool must not be used.
-  LIVE trading is NOT allowed. Never call create_order_instruction, alerts or watchlist-writing tools. Keep account data
-  out of git and out of public docs.
+- IBKR (user authorisation, updated 2026-10-15): the dashboard may take LIVE/delayed market data and READ-ONLY account data from the user's own
+  TWS / IB Gateway through command_center/ibkr (read-only wrapper). Default ports are PAPER (TWS 7497, Gateway 4002); live ports (7496, 4001) are
+  refused unless an explicit env var is set, and are still read-only. The data adapter must not expose order/cancel/modify calls (static + runtime tests).
+  The Claude-session IBKR connector remains read-only (never create_order_instruction, alerts or watchlist writes). Order logic lives only in
+  tradelab/execution against a SIMULATED broker. No real or paper order path is wired. Enabling PAPER requires ALL of: an approved strategy state, an approved
+  risk policy, the user's signed approval record (HMAC with a secret the agents do not hold), and a paper-account identity check. LIVE is NOT allowed.
+  Keep account data out of git and out of public docs (the repository is PUBLIC).
 - Only information available at the decision time may be used (no look-ahead). Conservative intrabar fills:
   if stop and target are both touched in one bar, assume the STOP filled first.
 - Chronological train / validation / final-test split. Purge so trades cannot straddle boundaries.

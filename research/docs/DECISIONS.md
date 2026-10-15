@@ -19,3 +19,5 @@
 - D12 2026-10-14 Windows setup gap: Python needs the tzdata package on Windows (added to requirements, friendly start-up check); optional packages (pandas/numpy/pyyaml) now give a clear 503 message.
 - D13 2026-10-14 Repository confirmed PUBLIC. Market data, account data and new snapshots are git-ignored; screenshots show delayed ETF prices. User advised how to make it private.
 - D14 2026-10-14 Data refresh kept as a separate snapshot (dataset B); frozen dataset A and its split are unchanged so the sealed test window is not shifted.
+- D15 2026-10-15 User asked for automatic live data from IBKR and for the broker/risk build. Decision: read-only data adapter via local TWS/Gateway (paper ports by default, order calls not exposed);
+  execution core built against a SIMULATED broker only; approvals gated by an HMAC key agents do not hold. IBKR states a paper account requires an approved AND funded live account; the user's account is currently unfunded (all zeros).

@@ -422,3 +422,85 @@ INCONCLUSIVE here is "not rejected under a deliberately narrow rule", not suppor
 ## Plain reading of what these results can and cannot show
 They show, descriptively and reproducibly (two independent implementations agree), that in 2023-2025 simple long-only trend filters on SPY/QQQ/IWM gave up return relative to buy-and-hold in every pooled segment (V1 by about 0.7 pp in train and 6.8 pp in validation, V2 by 5.9 / 15.3 pp, V3 by 35 / 16 pp) and cut the maximum drawdown by 12-15% in train and 31-55% in validation; costs are irrelevant at this trading frequency (x2 costs moves totals by under 0.1 pp). They cannot show that any rule has an edge or will protect capital in a future bear market:
 the sample is one rising regime with one sharp but short drawdown, each ETF has 0-4 round trips per segment, the three ETFs are highly correlated so the pooled series is not three independent trials, the validation drawdown benefit rests on a single episode, the sealed period is untouched and unknown, and the five forward days carry no inference.
+
+---
+
+# Broker safety audit (phase 6)
+
+Scope: the read-only IBKR data adapter (`command_center/ibkr/*`, `api_ibkr.py`, the portfolio/quotes routes that use it) and the execution core + PAPER adapter
+(`src/tradelab/execution/*`, `src/tradelab/brokers/ibkr_paper/*`), against the contract in `CLAUDE.md`, `docs/DECISIONS.md` D15-D16, `docs/EXECUTION_DESIGN.md`,
+`docs/PAPER_SETUP.md`, `docs/IBKR_SETUP.md`, `docs/READINESS.md`. Rules observed: no connection to any broker, TWS or Gateway (only `SimulatedBroker`, `tests/fake_ib_orders.FakeIB`,
+`command_center/ibkr/fake_ib.FakeIB`); only throwaway keys; no approval file outside a temp dir; no connector tools. Nothing here proves anything about the real TWS.
+Tests: `tests/test_review_broker_exec.py` (23 pass, 17 strict xfail), `tests/test_review_broker_dashboard.py` (21 pass), `tests/test_review_broker_exposure.py` (7 pass, 1 strict xfail).
+A plain test = an attack that FAILED against the current guard; a strict xfail = a reproduced weakness (remove the marker when fixed). The workers' own 278 exec/paper/ibkr tests still pass.
+
+Severity key (stricter than usual for this project): **HIGH** = a path to an unapproved order or non-paper account, OR a failure of risk containment that is reachable in normal operation with a fully valid approval.
+Count: **HIGH 2, MEDIUM 5, LOW 6, INFO 6.**
+
+## Verdict (plain)
+* **Dashboard / HTTP API / UI / data adapter / experiment runner / import / prefs: I found NO path to place, modify or cancel an order, to reach the paper adapter, the approval key or the ledger, or to read a non-DU account.**
+  The dashboard imports neither `tradelab.execution` nor `tradelab.brokers`; `ib_async` is imported only in `readonly_client.py`; no order-API name appears anywhere (AST scan of names, attributes and string constants); no
+  `eval/exec/importlib/getattr(computed)`; the single subprocess site is the fixed-argv experiment runner; no route or UI call has order/approval vocabulary; the connect route accepts only a `kind`, so host, port, clientId and readonly
+  cannot be chosen over HTTP (fake recorded 127.0.0.1:7497, readonly=True, clientId 9101); every live-ish `kind` string is refused; a fake non-DU login exposes no account data on any route; the account id is masked; fake mode is banner-labelled.
+* **Order path (execution core + paper adapter): YES, there are ways to reach the broker without the FULL chain, but only from code running in the same Python process (P6-01), plus several ways a fully approved chain still exceeds its own risk limits (P6-02, 03, 04, 10, 11).**
+  Every individual proof is genuinely enforced when the service is used as intended (missing/wrong key, strategy not `approved_paper`, edited policy file, other account, expired, tampered approval, replayed/edited/expired permit, 16-thread race on one permit, LIVE, simulated-only modes with the real adapter: all HELD).
+* **Single most dangerous finding: P6-02** - ordinary operation (a strategy that repeats an exit signal, or a double flatten) turns a long into a short through "reducing" orders, demonstrated end-to-end with every PAPER gate satisfied (`test_paper_chain_end_to_end_stacked_exits_flip_short`: +10 becomes -10 at the fake broker).
+  P6-01 is the most serious answer to "is the approval chain unbypassable": it is not, against code in the process, which `EXECUTION_DESIGN.md` states but `CLAUDE.md` does not.
+
+## HIGH
+
+### P6-01 HIGH (in-process only) - the order permit is forgeable; the adapter does not enforce the approval itself
+`src/tradelab/execution/permit.py:19-23,150-153` (`_SECRET`, `_MINT`, `_sign` are module globals), `permit.py:124-126` (caller check = `sys._getframe(1).f_globals["__name__"]`), `brokers/ibkr_paper/adapter.py:293` (`consume_permit` is the only gate in `submit`).
+Evidence: code that can `import tradelab.execution.permit` builds `PaperOrderPermit(sig=P._sign(body), _mint=P._MINT, **body)` and calls `IbkrPaperBroker.submit` directly: the fake receives `placeOrder` with no key, no strategy state, no policy hash, no risk check
+(`test_adapter_refuses_a_permit_forged_from_module_globals`); `exec(code, {"__name__": "tradelab.execution.service"})` defeats `mint_permit`'s caller check (`test_mint_permit_caller_check_cannot_be_spoofed`). Even simpler, such code can call `adapter.ib.placeOrder` or `ib_async` directly.
+Precondition: arbitrary Python execution on the machine that can reach the TWS paper API port (so NOT reachable from the dashboard or any HTTP route). `EXECUTION_DESIGN.md` s9/permit docstring admit "not a defence against hostile code in the same process"; `CLAUDE.md` says orders "require ALL of" the approval chain, which is only true for the service path.
+Fix: make the permit unforgeable without the user's key: sign it with a key derived from `CC_APPROVAL_KEY` (agents do not hold it) instead of a process secret, and have `submit` re-verify the approval file + registry state itself; delete the frame-name check; state in CLAUDE.md that an agent with local code execution and TWS access is out of scope of the in-process controls and keep the paper API read-only in TWS ("Read-Only API" ON) except while the user runs the smoke test.
+
+### P6-02 HIGH (risk containment) - "reducing" is judged on filled position only: stacked exits flip and flood
+`execution/risk.py:159-164,184-187` (`is_reducing`), `service.py:303-314`, `service.py:418-446` (`flatten_strategy_positions`). A reducing order skips ALL new-exposure checks (instrument, session, spread, shorting, max position, frequency), and the ledger position changes only on a fill.
+So with +10 filled and no fill processed yet, two SELL 10 are both "reducing" and both are sent: -10 at the broker although `allow_short: false` (`test_two_reducing_exits_cannot_flip_the_position_to_short`);
+20 SELL 1 go out against a 5/minute limit (`test_reducing_order_flood_...`); calling `flatten_strategy_positions` twice does the same (`test_double_flatten_does_not_flip`). With the full PAPER chain (key, approved state, approved policy, signed approval, permits, DU checks) all satisfied the result is identical (`test_paper_chain_end_to_end_stacked_exits_flip_short`).
+Realistic triggers: a strategy that re-emits an exit each bar while a limit exit rests, a retry, a double click on "flatten", a market closed with orders queued.
+Fix: count working/uncertain/submitting opposite-side quantity per instrument and allow only `|position| - working_opposite_qty` as reducing; the remainder is new exposure and fully checked; apply the frequency limits to every order; make `flatten` skip instruments that already have working exits.
+
+## MEDIUM
+
+### P6-03 MEDIUM - the reducing exemption stays active while reconciliation says the position is wrong
+`service.py:303-314`. After `reconcile()` reports `position mismatch` for an instrument (broker flat, ledger +10) a SELL 10 is still "reducing" and unchecked, and at the broker it opens a short (`test_reducing_exemption_not_used_when_ledger_and_broker_disagree`). Fix: when `recon_blocked` for that instrument, reducing quantity = min(ledger, broker) or block.
+
+### P6-04 MEDIUM - the approval binds a policy hash, but not the policy the engine enforces
+`execution/modes.py:113`, `service.py:44-47,331-334`. The gate hashes the FILE at `risk_policy_path`; the `RiskEngine` is built separately. A looser engine plus the path of the approved (stricter) file passes: 20 shares are sent although the approved policy caps SPY at 5 (`test_risk_engine_policy_must_be_the_approved_policy`).
+Fix: pass `risk.policy.sha256` into `assert_may_submit` and compare with the approval; refuse construction if they differ.
+
+### P6-05 MEDIUM - PAPER can run on an in-memory ledger; the writer lock protects a file, not an account
+`service.py:56-58`. `ExecutionService(":memory:", Mode.PAPER, ...)` is accepted: no lock, no persistence (a restart forgets every intent, so duplicate signals are re-sent; reconciliation then flags the unknown orders after the fact) (`test_paper_mode_requires_a_persistent_locked_ledger`).
+The lock is `flock(ledger + ".lock")` (or any `lock_path`), so two services with different ledgers can drive one account concurrently (`test_two_services_cannot_drive_the_same_broker_account`); same-ledger exclusion HOLDS (`test_single_writer_lock_blocks_second_service_on_same_ledger`).
+Fix: refuse `:memory:` outside simulated modes; take an additional lock keyed on the broker account id (and have the adapter hold it for the life of the connection).
+
+### P6-10 MEDIUM - the purpose label can skip the per-trade-risk rule
+`execution/risk.py:246-255`. Stop-required and `max_risk_per_trade` apply only when `purpose == 'entry'`. A flat-to-long BUY of 40 shares labelled `exit` or `protective` passes with no stop and no risk check, while the same order as an `entry` is blocked (`NO_STOP_FOR_RISK`) (`test_purpose_label_cannot_skip_the_per_trade_risk_check`).
+Fix: purposes `exit`/`protective` must be reducing or are rejected; apply the stop/risk rule to every non-reducing order.
+
+### P6-11 MEDIUM - `capital_allocation` is signed but never enforced
+Grep: the field appears only in `modes.py` (signing/field list) and `approve.py`. The documentation says the approval binds capital; an approval for $500 still allows ~$1,000 of stock (`test_signed_capital_allocation_is_enforced`). Fix: enforce gross notional after the order <= `capital_allocation`, or remove the claim.
+
+## LOW
+
+* **P6-06** `modes.py:74`: a non-ASCII `hmac_sha256` makes `hmac.compare_digest` raise `TypeError` (not `ModeDenied`); `propose` crashes instead of returning BLOCKED (fails closed, unhandled). Reproducer: `test_corrupt_approval_mac_is_a_clean_block`. Fix: compare `.encode()`d digests inside `try/except (TypeError, ValueError)`.
+* **P6-07** `adapter.py:154-168`: executions are deduplicated on the full `execId`. If IBKR re-sends a corrected execution with the same id stem and a higher revision suffix (documented IBKR convention; NOT verified here, and listed as a residual risk in the design doc) the correction is booked as a second fill (`test_execution_correction_is_not_double_counted`, assumption stated in the marker). Fix: key on the stem, let the highest revision win, raise `resync_required` on any change.
+* **P6-08** `adapter.py:127-130`, `orders.py:31-33`: the client order id uses only the first 20 hex characters of `orderRef`; a foreign order whose orderRef shares that prefix maps to OUR order (`test_foreign_orderref_with_same_prefix_is_foreign`). Intent ids are deterministic hashes, so the prefix is guessable by anyone who knows strategy/signal names. Fix: use the full 32 characters and verify against the ledger.
+* **P6-09** doc/comment mismatch: `brokers/ibkr_paper/guard.py:6` and `EXECUTION_DESIGN.md` say the data adapter uses clientIds 11-19; `command_center/ibkr/guard.py` uses 9100-9109 (`test_documented_client_id_ranges_match_the_code`). No collision (the paper adapter is 21), but the stated rule is wrong.
+* **P6-12** the approval expiry, permit TTL and staleness checks use the caller's clock; the broker's time (`adapter.server_time()`, unused) is never compared, so a wrong or wound-back clock revives an expired approval (`test_expired_approval_cannot_be_revived_by_a_wrong_local_clock`). Fix: refuse when |local - broker time| > a few seconds.
+* **P6-13** `approve.py:35-50`: the CLI signs approvals for non-DU accounts (`U...`) and for any validity (876,000 h accepted) (`test_approve_cli_refuses_non_paper_accounts_and_unbounded_validity`). The adapter refuses a non-DU account later, so no order results, but the record should not exist. It does refuse to run without the key and writes nothing (HELD: `test_approve_cli_refuses_without_the_key_and_writes_nothing`).
+
+## INFO
+* The data adapter's "private" IB object is only name-mangled (`ReadOnlyClient._ReadOnlyClient__ib`); no HTTP path can reach it, but in-process code can (same class of limit as P6-01). `ib_async` `readonly=True` is not a client-side order block (the docs say so); the real protection is TWS "Read-Only API" plus the wrapper having no order calls. The paper adapter needs that setting OFF, so enable it only while the user runs the smoke test.
+* `GET /api/portfolio`, `/api/ibkr/status|account` need no token (loopback + Host check only) and return paper-account positions/fills/exec ids when connected; the account id is masked.
+* `reconcile()` marks an order CANCELED when it is absent from `reqAllOpenOrders` and has no fills; if the broker query is incomplete (API quirk, day-window limits) a live order can be treated as gone and a later signal re-sent. Listed as a residual risk in the design doc; unverifiable without a real TWS.
+* Daily-loss and drawdown baselines are the first equity the service sees each trading date / ever (persisted in the ledger), not the prior close; limits and equity are compared in one unit with no currency conversion although the adapter allows CAD contracts.
+* `adapter.quote()` stamps a quote with the local clock when the ticker has no time, so a delayed quote without a timestamp would look fresh (the smoke test relies on `time`).
+* Honesty: `READINESS.md`, `PAPER_SETUP.md`, `IBKR_SETUP.md` and the UI badge all say nothing was run against a real TWS (test `test_docs_do_not_claim_real_broker_verification`); the fake data adapter is labelled SIMULATED in the banner, status, portfolio source and badge; `git ls-files` shows no approval, key, ledger, token, account export or real-looking account id (only placeholders such as DU1234567/DUFAKE001), no absolute user paths, and `.gitignore` covers approvals, snapshots, tokens and exports (`test_review_broker_exposure.py`).
+
+## Guards that held under attack (for the record)
+Host other than 127.0.0.1/::1; ports 7496, 4001, 4003, 7498, 7497.0, "7497", True, None; any of ten plausible environment variables; non-DU and mixed logins (disconnect, nothing sent); order account not in the login or not equal to the approved account; permit missing, forged signature, edited fields, wrong intent, expired, replayed, raced by 16 threads;
+approval missing, wrong key, edited payload, other account, other strategy/version, uncovered instrument, expired, edited policy file; LIVE construction and mode reassignment; DEMO/BACKTEST/REPLAY with the real adapter; duplicate signal, lost ack then new signal (UNCERTAIN blocks entries and no resend); ack never becomes a position, tampered `filled_qty` moves nothing; foreign working order blocks entries and is never cancelled; smoke registry answers only for (`SMOKE_TEST`, `1`).

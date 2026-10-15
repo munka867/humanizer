@@ -49,21 +49,25 @@ def test_guard_defaults_and_refusals():
     t = guard.resolve_target("paper_tws")
     assert (t.host, t.port, t.readonly, t.live_port) == ("127.0.0.1", 7497, True, False) and 9100 <= t.client_id <= 9109
     assert guard.resolve_target("paper_gateway").port == 4002
-    for kind in ("live_tws_readonly", "live_gateway_readonly"):
-        with pytest.raises(guard.GuardError, match="LIVE"):
-            guard.resolve_target(kind, env={})
-    live = guard.resolve_target("live_tws_readonly", env={guard.ENV_ALLOW_LIVE: "1"})
-    assert live.port == 7496 and live.readonly and live.live_port
-    with pytest.raises(guard.GuardError):
-        guard.resolve_target("live_tws_readonly", env={guard.ENV_ALLOW_LIVE: "yes"})  # only the exact value 1
+    # live ports: refused ALWAYS, there is no override (CLAUDE.md, narrowed 2026-10-15)
+    for env in ({}, {"CC_IBKR_ALLOW_LIVE_PORT_READONLY": "1"}):
+        for kind in ("live_tws_readonly", "live_gateway_readonly", "live_tws", "live"):
+            with pytest.raises(guard.GuardError, match="never allowed"):
+                guard.resolve_target(kind, env=env)
+        for port in (7496, 4001):
+            with pytest.raises(guard.GuardError, match="live-account port"):
+                guard.resolve_target("paper_tws", port=port, env=env)
+            with pytest.raises(guard.GuardError, match="live-account port"):
+                guard.kind_for_port(port, env=env)
+    assert not hasattr(guard, "ENV_ALLOW_LIVE") and not hasattr(guard, "live_ports_enabled")
     for host in ("192.168.1.5", "example.com", "0.0.0.0", "127.0.0.1.evil.com", ""):
         with pytest.raises(guard.GuardError, match="not this computer"):
             guard.resolve_target("paper_tws", host=host)
     for host in ("localhost", "::1", "127.0.0.1"):
         assert guard.resolve_target("paper_tws", host=host).host == host
-    for port in (7496, 4001, 80, 0, 7498, True, "7497"):
+    for port in (80, 0, 7498, True, "7497"):
         with pytest.raises(guard.GuardError):
-            guard.resolve_target("paper_tws", port=port, env={})
+            guard.resolve_target("paper_tws", port=port)
     with pytest.raises(guard.GuardError):
         guard.resolve_target("paper_tws", port=4002)         # port of another kind
     for cid in (0, 1, 9099, 9110, -1, True, "9101", 9101.0):
@@ -71,7 +75,15 @@ def test_guard_defaults_and_refusals():
             guard.resolve_target("paper_tws", client_id=cid)
     with pytest.raises(guard.GuardError):
         guard.resolve_target("bogus")
-    assert guard.allowed_kinds(env={}) == ["paper_tws", "paper_gateway"]
+    assert guard.allowed_kinds() == ["paper_tws", "paper_gateway"] == guard.allowed_kinds(env={"CC_IBKR_ALLOW_LIVE_PORT_READONLY": "1"})
+
+
+def test_paper_account_identity_check():
+    guard.check_paper_accounts(["DU1234567"])
+    guard.check_paper_accounts(["DU1", "DU2"])
+    for bad in ([], None, ["U1234567"], ["DU1", "U2"], ["du1"], [""], ["XDU1"]):
+        with pytest.raises(guard.AccountIdentityError, match="not a PAPER account"):
+            guard.check_paper_accounts(bad)
 
 
 def test_connect_passes_readonly_and_guarded_target():
@@ -493,15 +505,34 @@ def test_manager_connect_status_quotes_account_disconnect(mgr, tmp_path):
     assert mgr.status()["feeds"]["quotes"]["as_of"] and mgr.status()["subscribed"] == 1
     snap = mgr.account_snapshot()
     assert snap["values"]["NetLiquidation"] == ("98765.43", "USD") and mgr.status()["feeds"]["account"]["as_of"]
-    assert mgr.status()["account_masked"] == "F*****01" and "FAKE0001" not in json.dumps(mgr.status())
+    assert mgr.status()["account_masked"] == "DU*****01" and "DUFAKE001" not in json.dumps(mgr.status())
     mgr.disconnect()
     assert mgr.status()["state"] == "disconnected" and mgr.live_quotes([{"symbol": "SPY", "exchange": "ARCA", "conid": 756733}]) == {}
 
 
-def test_manager_refuses_live_port_without_env_and_never_starts_thread(mgr):
-    with pytest.raises(guard.GuardError):
-        mgr.connect("live_tws_readonly")
+def test_manager_refuses_live_port_and_never_starts_thread(mgr):
+    for env in ({}, {"CC_IBKR_ALLOW_LIVE_PORT_READONLY": "1"}):
+        mgr.env = env
+        with pytest.raises(guard.GuardError):
+            mgr.connect("live_tws_readonly")
     assert mgr.state == "disconnected" and mgr._loop is None
+
+
+@pytest.mark.parametrize("accounts", [["U1234567"], ["DU1111111", "U2222222"], []])
+def test_non_paper_account_is_disconnected_and_exposes_nothing(mgr, accounts):
+    mgr.fake_ib.accounts = accounts
+    mgr.connect("paper_tws")
+    wait_for(lambda: mgr.status()["state"] == "error")
+    wait_for(lambda: not mgr.fake_ib.isConnected())                     # the adapter disconnected immediately
+    st = mgr.status()
+    assert st["last_error"]["title"] == "Not a paper account: refused" and "DU" in st["last_error"]["message"] and st["last_error"]["fix"]
+    assert st["feeds"]["quotes"]["as_of"] is None and st["feeds"]["account"]["as_of"] is None and st["account_masked"] is None and st["subscribed"] == 0
+    assert mgr.live_quotes([{"symbol": "SPY", "exchange": "ARCA", "conid": 756733}]) == {} and mgr.account_snapshot() is None
+    assert mgr.fake_ib.market_data_type_calls == [] and mgr.fake_ib._tickers == {}      # nothing was requested from that session
+    time.sleep(0.4)
+    assert mgr.status()["attempts"] == 1 and mgr.status()["state"] == "error"         # terminal: no retry loop against a live login
+    for e in (str(st), ):
+        assert "U1234567" not in e and "U2222222" not in e
 
 
 def test_manager_error_state_with_plain_language_and_backoff_then_recovers(mgr):
@@ -574,7 +605,7 @@ def test_manager_history_error_is_reported_in_job(mgr):
 
 
 def test_mask_account():
-    assert mask_account("U1234567") == "U*****67" and mask_account(None) is None and "1234" not in mask_account("DU1234567")
+    assert mask_account("DU1234567") == "DU*****67" and mask_account(None) is None and "1234" not in mask_account("DU1234567")
 
 
 def test_real_library_wrapper_constructs_and_maps_a_refused_connection():
@@ -585,3 +616,22 @@ def test_real_library_wrapper_constructs_and_maps_a_refused_connection():
         run(c.connect(1.5))
     assert "listening" in E.explain_exception(ei.value, 7497)["message"] or "did not" in E.explain_exception(ei.value, 7497)["title"].lower()
     assert not c.connected
+
+
+def test_doctor_passes_on_simulated_ib_and_stops_on_non_paper_login():
+    from command_center.ibkr.doctor import run_doctor
+    lines = []
+    assert run(run_doctor(None, FakeIB, FakeStock, out=lines.append, fake=True, wait_tick=2)) == 0
+    txt = "\n".join(lines)
+    assert txt.count("PASS") >= 8 and "FAIL" not in txt and "DU*****01" in txt and "values not printed" in txt
+
+    class Live(FakeIB):
+        def __init__(self):
+            super().__init__()
+            self.accounts = ["U9999999"]
+    lines = []
+    assert run(run_doctor(None, Live, FakeStock, out=lines.append, fake=True, wait_tick=2)) == 1
+    txt = "\n".join(lines)
+    assert "FAIL  paper account identity" in txt and "market-data" not in txt and "account summary" not in txt and "U9999999" not in txt
+    out = []
+    assert run(run_doctor(7496, FakeIB, FakeStock, out=out.append, fake=True)) == 1 and any("live-account port" in x for x in out)

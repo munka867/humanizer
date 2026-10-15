@@ -17,11 +17,12 @@ from pathlib import Path
 from typing import Callable
 
 from tradelab.execution import orders as O
-from tradelab.execution.broker import (BrokerDisconnected, BrokerEvent, BrokerPort, BrokerTimeout, OrderRequest)
+from tradelab.execution.broker import (BrokerDisconnected, BrokerEvent, BrokerPort, BrokerRefused, BrokerTimeout, OrderRequest)
 from tradelab.execution.common import D, canon, iso, sha256_hex
 from tradelab.execution.db import kv_get, kv_set, open_db, tx
 from tradelab.execution.intents import ENTRY, EXIT, PROTECTIVE, IntentLedger, Proposal, make_intent_id
 from tradelab.execution.modes import Mode, ModeDenied, assert_may_submit
+from tradelab.execution.permit import mint_permit
 from tradelab.execution.risk import Quote, RiskDecision, RiskEngine, RiskInputs, is_reducing
 
 
@@ -178,6 +179,10 @@ class ExecutionService:
             self.incident("POLL_FAILED", "medium", {})
             return 0
         for ev in events:
+            if ev.kind == "resync_required":
+                self.incident("BROKER_RESYNC_REQUIRED", "high", {"reason": ev.reason})
+                kv_set(self.conn, "recon_blocked", True)
+                continue
             row = self.orders.get(ev.client_order_id)
             if row is None:
                 self.incident("EVENT_UNKNOWN_ORDER", "high", {"kind": ev.kind, "client_order_id": ev.client_order_id})
@@ -197,6 +202,10 @@ class ExecutionService:
                 elif ev.kind == "cancel_ack":
                     if st in (O.CANCEL_PENDING, O.ACKED, O.PARTIAL, O.UNCERTAIN):
                         self.orders.transition(ev.client_order_id, O.CANCELED, now, "cancel ack")
+                elif ev.kind == "uncertain":
+                    if st not in O.TERMINAL and st != O.UNCERTAIN:
+                        self.orders.transition(ev.client_order_id, O.UNCERTAIN, now, "broker signal ambiguous: " + ev.reason)
+                        self.incident("ORDER_UNCERTAIN", "high", {"client_order_id": ev.client_order_id, "reason": ev.reason})
                 elif ev.kind == "cancel_reject":
                     if st == O.CANCEL_PENDING:
                         filled = D(row["filled_qty"])
@@ -256,7 +265,10 @@ class ExecutionService:
             pass   # leaves fields None => MISSING_INPUT => new exposure blocked
         quotes = {}
         for cid in set(x.positions or {}) | {p.con_id}:
-            q = self.quote_source(cid)
+            try:
+                q = self.quote_source(cid)
+            except Exception:      # any quote-source failure = missing input = new exposure blocked
+                q = None
             if q is not None:
                 quotes[cid] = q
         x.quotes = quotes
@@ -316,14 +328,14 @@ class ExecutionService:
             return SubmitResult(iid, "SHADOWED", (), False, None, decision)
         # mode gate immediately before the broker port (re-evaluated every time: approvals expire)
         try:
-            assert_may_submit(self.mode, broker_is_simulated=getattr(self.broker, "is_simulated", False),
+            approval = assert_may_submit(self.mode, broker_is_simulated=getattr(self.broker, "is_simulated", False),
                               registry_state=self._registry_state, strategy_id=p.strategy_id, strategy_version=p.strategy_version,
                               instruments=[p.con_id], risk_policy_path=self._policy_path, approval_path=self._approval_path,
                               broker_account_id=self._safe_account_id(), now_utc=now, env=self._env)
         except ModeDenied as e:
             self.intents.set_status(iid, "BLOCKED", decision.decision_id)
             return SubmitResult(iid, "BLOCKED", (f"MODE_GATE:{e}",), False, None, decision)
-        return self._send(iid, row, p, decision, now)
+        return self._send(iid, row, p, decision, now, approval)
 
     def _safe_account_id(self):
         try:
@@ -331,13 +343,21 @@ class ExecutionService:
         except (BrokerDisconnected, BrokerTimeout):
             return None
 
-    def _send(self, iid, row, p, decision, now) -> SubmitResult:
+    def _send(self, iid, row, p, decision, now, approval=None) -> SubmitResult:
         coid = self.orders.create(row, now)
         self.orders.transition(coid, O.SUBMITTING, now, "submitting")
         self.intents.set_status(iid, "SENT", decision.decision_id)
-        req = OrderRequest(coid, p.con_id, p.side, D(p.qty), p.order_type, p.limit_px, p.stop_px, p.tif, p.outside_rth)
+        permit = None
+        if self.mode is Mode.PAPER and approval is not None:
+            permit = mint_permit(approval, intent_id=iid, client_order_id=coid, con_id=p.con_id, side=p.side, qty=D(p.qty),
+                                 order_type=p.order_type, limit_px=p.limit_px, stop_px=p.stop_px, tif=p.tif, outside_rth=p.outside_rth, now=now)
+        req = OrderRequest(coid, p.con_id, p.side, D(p.qty), p.order_type, p.limit_px, p.stop_px, p.tif, p.outside_rth, intent_id=iid, permit=permit)
         try:
             bid = self.broker.submit(req)
+        except BrokerRefused as e:
+            self.orders.transition(coid, O.REJECTED, now, f"refused before sending: {e}")
+            self.intents.set_status(iid, "BLOCKED", decision.decision_id)
+            return SubmitResult(iid, "BLOCKED", (f"BROKER_PORT_REFUSED:{e}",), False, coid, decision)
         except (BrokerTimeout, BrokerDisconnected) as e:
             self.orders.transition(coid, O.UNCERTAIN, now, f"submit outcome unknown: {type(e).__name__}")
             self.incident("ORDER_UNCERTAIN", "high", {"client_order_id": coid, "error": type(e).__name__})
@@ -370,6 +390,16 @@ class ExecutionService:
                 out.append(row["client_order_id"])
         return out
 
+    def cancel_working_orders(self, strategy_id: str) -> list[str]:
+        """Operator/abort path: request cancellation of EVERY working order this ledger owns for `strategy_id` (all purposes). Used before a
+        flatten so a resting exit cannot double-close. Requests only; confirm via the cancel acks."""
+        out = []
+        for row in self.orders.by_state(O.ACKED, O.PARTIAL):
+            if row["strategy_id"] == strategy_id:
+                self._request_cancel(row, "cancel_working_orders")
+                out.append(row["client_order_id"])
+        return out
+
     def emergency_stop(self, reason: str, strategy_ids=()) -> list[str]:
         """Persisted. Blocks all non-reducing orders and requests cancellation of entry orders of the listed strategies."""
         kv_set(self.conn, "emergency_stop", True)
@@ -385,12 +415,15 @@ class ExecutionService:
         kv_set(self.conn, "emergency_stop", False)
         self.incident("EMERGENCY_CLEARED", "info", {"operator": operator, "note": note})
 
-    def flatten_strategy_positions(self, strategy_id: str, version: str = "flatten") -> dict:
+    def flatten_strategy_positions(self, strategy_id: str, version: str | None = None) -> dict:
         """Send risk-REDUCING market orders for the strategy's fill-derived positions. Returns what ACTUALLY happened after one event
         pass: per instrument requested qty, filled qty, residual exposure, status. It may fail or fill poorly; a stop order does not
         cap loss (gaps, slippage); nothing here claims otherwise. Working protective orders are left in place and are cancelled
         only after the position is observed flat."""
         pos = self.orders.positions(strategy_id)
+        if version is None:      # the flatten order belongs to the strategy version that opened the position (approvals bind the version)
+            r = self.conn.execute("SELECT strategy_version FROM intents WHERE strategy_id=? ORDER BY created_utc DESC, rowid DESC LIMIT 1", (strategy_id,)).fetchone()
+            version = r["strategy_version"] if r else "flatten"
         seq = int(kv_get(self.conn, "flatten_seq", 0)) + 1
         kv_set(self.conn, "flatten_seq", seq)
         report = {"strategy_id": strategy_id, "instruments": {}}

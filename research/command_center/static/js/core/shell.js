@@ -192,9 +192,9 @@ export function createShell(ctx) {
     const b = env.broker, ib = ibkrStore(ctx).get(), c = chipText(ib);
     panel("Broker data connection", (box, p) => box.append(
       ui.badge(ib && ib.state === "connected" ? (ib.fake ? "demo" : "ok") : ib && ib.state === "error" ? "bad" : "warn", c.label, c.icon),
-      ib && ib.last_error ? el("p", { class: "pop-note" }, el("strong", {}, ib.last_error.title + ". "), ib.last_error.message, " ", ib.last_error.fix) : el("p", { class: "pop-note" }, ib && ib.state === "connected" ? "Read-only market and account data from your own TWS/Gateway. Not yet verified against a real account." : `${b.reason}. Connect TWS/Gateway in Data & Connections to get live or delayed data.`),
+      ib && ib.last_error ? el("p", { class: "pop-note" }, el("strong", {}, ib.last_error.title + ". "), ib.last_error.message, " ", ib.last_error.fix) : el("p", { class: "pop-note" }, ib && ib.state === "connected" ? "Read-only market and account data from your own TWS/Gateway paper login. Not yet verified against a real account." : el("span", {}, el("strong", {}, "Trading setup incomplete. "), `${b.reason}. Connect TWS/Gateway (paper) in Data & Connections to get live or delayed data.`)),
       el("dl", { class: "kv" }, row("Execution", "none — no order path exists"), row("Market data", ib && ib.state === "connected" ? "live/delayed ticks, labelled per tick" : "daily files only (historical)"), row("Account data", ib && ib.state === "connected" ? "read-only snapshot" : "not connected"), row("Risk engine", "not built")),
-      ui.btn("Open IBKR connection", { kind: "primary", icon: "data", onClick: () => { p.close(false); ctx.nav("data"); } })), a);
+      ui.btn(ib && ib.state === "connected" ? "Open IBKR connection" : "Set up in Data & Connections", { kind: "primary", icon: "data", onClick: () => { p.close(false); ctx.nav("data"); } })), a);
   }
   function dataPanel(a) {
     const f = freshness.get("quotes"), md = env.connections?.market_data;

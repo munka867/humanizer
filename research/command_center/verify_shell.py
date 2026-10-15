@@ -157,8 +157,8 @@ def main():
             # environment / execution honesty
             env_txt = page.locator("#env-badge").inner_text()
             check("ENVIRONMENT badge states research only / no execution", "RESEARCH ONLY" in env_txt and "Execution: none" in (page.get_attribute("#env-badge", "title") or ""), env_txt)
-            check("broker chip says 'Broker not connected'", "Broker not connected" in page.locator("#chip-broker").inner_text())
-            check("market-data chip is Historical (daily bars), never Realtime", "Historical" in page.locator("#chip-data").inner_text() and "Realtime" not in page.locator("#chip-data").inner_text(), page.locator("#chip-data").inner_text())
+            check("broker chip says 'Broker data: not connected' (data chip; execution stays none)", "Broker data: not connected" in page.locator("#chip-broker").inner_text())
+            check("market-data chip is Historical or Stale (daily bars age with the calendar), never Realtime", any(w in page.locator("#chip-data").inner_text() for w in ("Historical", "Stale")) and "Realtime" not in page.locator("#chip-data").inner_text(), page.locator("#chip-data").inner_text())
             sess = page.locator("#chip-session")
             sess_txt = sess.inner_text() if sess.is_visible() else page.evaluate("document.getElementById('chip-session').textContent")
             check("exchange-session chip is NYSE open/closed and marked unverified", ("NYSE open" in sess_txt or "NYSE closed" in sess_txt) and "unverified" in sess_txt, sess_txt)
@@ -331,7 +331,7 @@ def main():
             page.wait_for_function("__cc.ctx.events.state().conn === 'stale'", timeout=15000)
             banner = page.locator(".banner-stale").inner_text()
             check("STALE banner: 'Event stream STALE - showing last known state as of <time>'", "Event stream STALE" in banner and "last known state as of" in banner, banner)
-            check("freshness model: agents feed is 'stale', quotes/broker feeds independent", page.evaluate("__cc.ctx.freshness.get('agents').state") == "stale" and page.evaluate("__cc.ctx.freshness.get('quotes').state") == "historical" and page.evaluate("__cc.ctx.freshness.get('broker').state") == "unavailable")
+            check("freshness model: agents feed is 'stale', quotes/broker feeds independent", page.evaluate("__cc.ctx.freshness.get('agents').state") == "stale" and page.evaluate("__cc.ctx.freshness.get('quotes').state") in ("historical", "stale") and page.evaluate("__cc.ctx.freshness.get('broker').state") == "unavailable")
             check("workspace greyed while stale", page.evaluate("document.getElementById('workspace').classList.contains('is-stale')"))
             shot(page, "stale")
             # events written while the server is down (straight into the DB file) must replay after restart, once, in order

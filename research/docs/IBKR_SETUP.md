@@ -3,14 +3,16 @@
 **Honesty first.** This feature was written and tested against a SIMULATED IB (`command_center/ibkr/fake_ib.py`). It has **not** been run against a real TWS or
 IB Gateway, and nothing here claims it works with your account. The first real run is yours: start with the doctor (section 7) and report any FAIL.
 
+**PAPER ACCOUNT ONLY.** The only IBKR account this project may use is your **paper-trading** account (its ids start with `DU`). Keep your TWS / Gateway login on the paper account. Live ports (7496, 4001) are always refused, with no override. After connecting, the dashboard reads the managed account ids; if any id does not start with `DU` it disconnects at once, shows "Not a paper account: refused", and serves no quotes or account data from that session.
+
 **What it can and cannot do.** The dashboard reads market data and account data. It has no order screen, no order endpoint, and the adapter package contains
 no order-sending, changing or cancelling call (a static test scans every file for them, and a runtime test checks the wrapper object has none). Execution stays "none".
-Keep TWS **Read-Only API ON**: IBKR says it is on by default and blocks all API orders. (Consequence: IBKR also hides order/execution information from the API while it is on, so
+For the dashboard's data adapter, **Read-Only API can stay ON** (IBKR says it is on by default and blocks all API orders). A separate, order-capable paper adapter (not part of this dashboard, not built here) would need it OFF; **never log in to a live account in a TWS where Read-Only API is OFF**, and keep one TWS for paper only. (Consequence: IBKR also hides order/execution information from the API while it is on, so
 the Portfolio screen shows working orders and fills as "unknown", not "none".)
 
 ## 1. What you need
 - A Windows computer with TWS (Trader Workstation) **or** IB Gateway installed and logged in. Either works; the API is the same. Download: https://www.interactivebrokers.com/en/trading/tws.php (TWS) and https://www.interactivebrokers.com/en/trading/ibgateway-stable.php (Gateway).
-- Log in to a **paper** account. IBKR's API docs say paper trading "requires an approved, funded live account" (docs/BROKER_NOTES.md); your connected account was empty/new on 2026-10-08, so you may not be able to get one yet. Live data also needs "live data permissions", which for most instruments means a funded account with market-data subscriptions.
+- Log in to your **paper** account (ids start with DU). IBKR's API docs say paper trading "requires an approved, funded live account" (docs/BROKER_NOTES.md); your connected account was empty/new on 2026-10-08, so you may not be able to get one yet. Live data also needs "live data permissions", which for most instruments means a funded account with market-data subscriptions.
 - IBKR staff replied on Campus that APIs are not available for IBKR Lite accounts (a reader comment thread, not formal documentation): check your account plan with IBKR.
 - Python 3.10 or newer. ib_async 2.1.0 lists Python 3.10 to 3.14; **Python 3.15 is UNVERIFIED** (the server still starts without ib_async, you just cannot connect).
 
@@ -18,7 +20,7 @@ the Portfolio screen shows working orders and fills as "unknown", not "none".)
 TWS: click the cog wheel (top right) > Global Configuration > **API > Settings**. IB Gateway: **Configure > Settings > API > Settings**. (Menu names differ between versions; IBKR's older docs say Edit > Global Configuration > API > Settings.)
 1. Tick **Enable ActiveX and Socket Clients** (IB Gateway turns this on by itself; IBKR says the checkbox may not even appear there).
 2. Leave **Read-Only API ON**.
-3. **Socket port**: defaults are TWS live 7496 / paper **7497**; IB Gateway live 4001 / paper **4002**. This dashboard allows only 7497 and 4002 unless you start it with `CC_IBKR_ALLOW_LIVE_PORT_READONLY=1` (then 7496/4001 become selectable; still read-only).
+3. **Socket port**: IBKR's defaults are TWS live 7496 / paper **7497**; IB Gateway live 4001 / paper **4002**. This dashboard allows only the paper ports 7497 and 4002; 7496 and 4001 are refused with no override.
 4. Make sure **127.0.0.1** is in **Trusted IPs** (if TWS shows an "accept incoming connection" prompt, accept it). Only this computer is ever allowed by the dashboard.
 5. Apply, OK. Keep TWS/Gateway running and logged in. IBKR designs both to restart daily (there is a nightly reset); the dashboard reconnects automatically with backoff.
 
@@ -52,7 +54,7 @@ python -m command_center.ibkr.doctor            # TWS paper 7497
 python -m command_center.ibkr.doctor --port 4002   # Gateway paper
 python -m command_center.ibkr.doctor --fake        # same steps against the SIMULATED IB, proves the tool itself
 ```
-Steps (read-only; no orders, nothing written): ib_async installed, port allowed, port reachable, connect, server time, SPY qualifies, market-data type and a quote, 1 daily bar, account summary readable. Each FAIL prints the exact fix.
+Steps (read-only; no orders, nothing written): ib_async installed, port allowed, port reachable, connect, paper-account identity (DU),  server time, SPY qualifies, market-data type and a quote, 1 daily bar, account summary readable. Each FAIL prints the exact fix.
 
 ## 8. Facts: VERIFIED vs UNVERIFIED
 Verified = read on an official page or the package source by me on 2026-10-15 (fetched via Firecrawl). Nothing below was verified by running against a real TWS/Gateway.
@@ -79,7 +81,7 @@ Verified = read on an official page or the package source by me on 2026-10-15 (f
 | Client Portal menu path for market-data subscriptions | UNVERIFIED | |
 
 ## 9. Safety summary (all enforced in code and tests)
-- Loopback only; ports 7497 and 4002 by default; 7496/4001 refused unless `CC_IBKR_ALLOW_LIVE_PORT_READONLY=1`; clientId fixed to 9100 to 9109; the connection flag is read-only.
+- Loopback only; paper ports 7497 and 4002 only; 7496/4001 always refused (no environment override); clientId fixed to 9100 to 9109; the connection flag is read-only; every managed account id must start with `DU` or the adapter disconnects and refuses.
 - Stocks and ETFs only: other security types are refused.
 - No order, cancel, modify or what-if call exists anywhere in `command_center/ibkr` or `api_ibkr.py`; the wrapper never hands out the underlying IB object.
 - Simulated mode (`CC_IBKR_FAKE=1`, tests only, never the default): unmissable banner, `source='fake'`, files only under `data/fake_<date>/`.

@@ -1,8 +1,9 @@
 # EXECUTION_DESIGN — execution core (SIMULATED BROKER ONLY)
 
-Status 2026-10-15: `src/tradelab/execution/` is deterministic machinery proven against `SimulatedBroker`. It contains **no real or
-paper broker adapter**, no network code and no broker SDK import (static test `tests/test_exec_static.py`). Nothing here has
-ever talked to a broker. See docs/READINESS.md for what is and is not done.
+Status 2026-10-15: `src/tradelab/execution/` is deterministic machinery proven against `SimulatedBroker`. It contains **no broker adapter**,
+no network code and no broker SDK import (static test `tests/test_exec_static.py`; it stays pure). A separate PAPER-only adapter,
+`src/tradelab/brokers/ibkr_paper/`, implements the `BrokerPort` over ib_async and has been tested ONLY against a fake ib_async object
+(section 11). Nothing here has ever talked to a real broker, paper or live. See docs/READINESS.md.
 
 ## 1. Principles
 1. One execution authority (`ExecutionService`). Strategies only produce `on_bar(bar) -> Signal`; they never get a handle to the service, mode, risk engine or broker.
@@ -91,3 +92,30 @@ The HMAC protects against an agent forging or editing a record; it does NOT prot
 
 ## 10. Known design limits
 Single instrument per replay runner; daily-loss measured from equity (needs a reliable broker equity feed); no holiday/half-day session calendar; exposure uses mid quotes, not margin; correlation map is supplied, not estimated; quantities are Decimal but fractional-share and lot rules are not modelled; no order modification (cancel/replace) path beyond cancel + new intent.
+
+## 11. PAPER adapter (`tradelab/brokers/ibkr_paper`) - added 2026-10-15, fake-tested only
+Dependency direction: `brokers.ibkr_paper -> execution`; never the reverse; `command_center` imports neither. ib_async (pin 2.1.0, BSD-2-Clause, optional,
+lazy import) may be imported only in `brokers/ibkr_paper` and `command_center/ibkr` (static test); `ibapi`/`ib_insync` nowhere.
+* `guard.py`: loopback host only; ports 7497 and 4002 only, no override; clientId fixed at 21 (data adapter uses 11-19); after connect every managed account
+  must start with `DU` (and contain the approved account) or the adapter disconnects and refuses; every order's account must equal the account bound in the
+  signed approval and be one of the connected login's accounts.
+* `execution/permit.py`: `PaperOrderPermit` is minted only by `ExecutionService` (caller check) after `assert_may_submit(PAPER)` succeeds for THAT order;
+  per-process-secret signature (tamper-evident), 60 s expiry, bound to the intent id and the exact order fields, single use. The adapter refuses any
+  `submit` without a valid permit (`BrokerRefused`: nothing was sent, so the order is marked REJECTED).
+* `adapter.py`: STK only, USD/CAD, MKT/LMT/STP, DAY/GTC, whole shares, outsideRth False unless enabled, explicit `account`, `orderRef = intent_id`
+  (reconciliation recomputes the client order id from it; orders without our orderRef are FOREIGN and block entries). Contract is qualified by conId
+  and must come back as the same STK conId. Optional what-if margin check (also exposed as the service's `margin_hook`): a warning or an excessive
+  margin change refuses; unavailable what-if returns None (the risk policy decides, `require_margin_check` blocks).
+* Callback mapping: `orderStatus` PreSubmitted/Submitted -> ack (once); Cancelled -> cancel_ack; Inactive -> uncertain; Filled -> NO event (an ack/status is never a
+  fill). Fills come only from `execDetails` (deduped on execId; commissions kept by execId in `adapter.commissions`). If a status reports more filled
+  than execution details seen, the adapter emits `resync_required` instead of guessing, and the service blocks entries until `reconcile()` is clean.
+* Error table (`errors.py`): 201/110/200 reject; 202 cancelled; 161 cancel not possible; 103/104/135 and any unmapped order error -> `uncertain` (never blind
+  retry); 504/1300 disconnect (unacked orders -> UNCERTAIN) and 1100/1101/1102 resync; 354/399/21xx informational.
+* Reconnect: `open_orders()` = `reqAllOpenOrders`, `executions()` = `reqExecutions`, `positions()` = `reqPositions`, all filtered to the connected accounts; the
+  existing service reconciliation applies them. `shortable()` returns None, so shorting stays blocked.
+* New service behaviour: `uncertain` and `resync_required` events; `BrokerRefused` marks the order REJECTED; `cancel_working_orders` (abort path);
+  `flatten_strategy_positions` uses the version of the strategy that opened the position (approvals bind the version).
+* `smoke_test.py`: user-run end-to-end check (docs/PAPER_SETUP.md): hard-coded 1 share / SPY 756733 / `SMOKE_TEST` v1 registry entry (exists only there, still
+  needs the signed approval), typed confirmation phrase, one buy then the offsetting sell, audit trail, per-step PASS/FAIL, non-zero exit on any anomaly,
+  cancels its own working orders and flattens only what it created (never a blind flatten if the cancels are unconfirmed).
+Residual risks: execution-id corrections, delayed commission reports, `reqExecutions` day-window limits, STP orders that gap, real TWS error ordering.

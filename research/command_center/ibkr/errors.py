@@ -56,6 +56,12 @@ def explain_exception(exc: BaseException, port: int | None = None) -> dict:
     name = type(exc).__name__
     text = str(exc) or name
     where = f" on port {port}" if port else ""
+    if name == "LibraryMissing":
+        return {"code": None, "severity": "error", "title": "ib_async is not installed", "message": text, "fix": "Run: python -m pip install ib_async==2.1.0  (then restart the dashboard).", "basis": "local", "raw": text[:300]}
+    if name == "AccountIdentityError":
+        return {"code": None, "severity": "error", "title": "Not a paper account: refused", "message": text, "fix": "Quit TWS/Gateway, log in with your PAPER trading username (account ids start with DU), then connect again.", "basis": "local safety rule (CLAUDE.md)", "raw": text[:300]}
+    if name == "GuardError":
+        return {"code": None, "severity": "error", "title": "Connection refused by the safety guard", "message": text, "fix": "Use the paper port (TWS 7497 or Gateway 4002). Live ports are never allowed.", "basis": "local", "raw": text[:300]}
     if isinstance(exc, ConnectionRefusedError) or "refused" in text.lower() or "10061" in text:
         d = explain(502, text)
         d["message"] = f"Nothing is listening{where}. TWS / IB Gateway is not running, or its API is not enabled, or the port differs."
@@ -65,10 +71,4 @@ def explain_exception(exc: BaseException, port: int | None = None) -> dict:
                 "message": f"The connection{where} opened but TWS did not finish the handshake.",
                 "fix": "Look at the TWS window: it may be waiting for you to log in or to accept an 'incoming connection' prompt. Add 127.0.0.1 to Trusted IPs in the API settings, then retry.",
                 "basis": "general", "raw": text[:300]}
-    if name == "LibraryMissing":
-        return {"code": None, "severity": "error", "title": "ib_async is not installed", "message": text, "fix": "Run: python -m pip install ib_async==2.1.0  (then restart the dashboard).", "basis": "local", "raw": text[:300]}
-    if name == "AccountIdentityError":
-        return {"code": None, "severity": "error", "title": "Not a paper account: refused", "message": text, "fix": "Quit TWS/Gateway, log in with your PAPER trading username (account ids start with DU), then connect again.", "basis": "local safety rule (CLAUDE.md)", "raw": text[:300]}
-    if name == "GuardError":
-        return {"code": None, "severity": "error", "title": "Connection refused by the safety guard", "message": text, "fix": "Use the paper port (TWS 7497 or Gateway 4002). Live ports are never allowed.", "basis": "local", "raw": text[:300]}
     return {"code": None, "severity": "error", "title": "Connection failed", "message": f"{name}: {text}"[:300], "fix": "Check that TWS/Gateway is running and logged in; see docs/IBKR_SETUP.md.", "basis": "general", "raw": text[:300]}

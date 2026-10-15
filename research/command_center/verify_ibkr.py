@@ -116,7 +116,7 @@ def run(page, ib, mgr, shots, ibroot, data_root):
         check("positions: broker reported none", "reported" in page.inner_text("#pf-positions") and "no stock positions" in page.inner_text("#pf-positions").lower())
         check("orders and fills: unknown because of Read-Only API", "unknown" in page.inner_text("#pf-orders").lower() and "Read-Only API" in page.inner_text("#pf-orders"))
         check("order entry still absent", "Order entry unavailable" in page.inner_text(".mk-entry") and page.locator(".mk-entry button").count() == 0)
-        check("account masked, simulated labelled", "F*****01" in page.inner_text("[data-testid=broker-strip]") and "SIMULATED" in page.inner_text("[data-testid=broker-strip]"))
+        check("account masked, simulated labelled", "DU*****01" in page.inner_text("[data-testid=broker-strip]") and "SIMULATED" in page.inner_text("[data-testid=broker-strip]"))
         page.screenshot(path=str(shots / "ibkr-portfolio-connected-1440x900.png"))
     j4()
 

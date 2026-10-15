@@ -22,6 +22,11 @@ class BrokerDisconnected(Exception):
     """Connection lost: outcome unknown."""
 
 
+class BrokerRefused(Exception):
+    """The port refused BEFORE anything was sent (bad permit, wrong account, unsupported order, margin what-if failed).
+    Definitely nothing is at the broker, so the order may be marked REJECTED safely."""
+
+
 @dataclass(frozen=True)
 class OrderRequest:
     client_order_id: str
@@ -33,6 +38,8 @@ class OrderRequest:
     stop_px: Decimal | None = None
     tif: str = "DAY"
     outside_rth: bool = False
+    intent_id: str | None = None      # becomes the broker-side orderRef so reconciliation can map orders back
+    permit: object | None = None      # PaperOrderPermit (execution/permit.py); real adapters refuse without a valid one
 
 
 @dataclass(frozen=True)

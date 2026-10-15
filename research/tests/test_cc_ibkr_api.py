@@ -58,7 +58,7 @@ def test_status_public_and_honest(env):
     s, m, ib = env
     st, j = call(s, "GET", "/api/ibkr/status", token=None)
     assert st == 200 and j["state"] == "disconnected" and j["execution"] == "none" and j["readonly"] is True and j["fake"] is True
-    assert "SIMULATED" in j["banner"] and "Not yet run against a real" in j["honesty"] and j["allowed_kinds"] == ["paper_tws", "paper_gateway"]
+    assert "SIMULATED" in j["banner"] and "Not yet run against a real" in j["honesty"] and j["allowed_kinds"] == ["paper_tws", "paper_gateway"] and j["paper_only"] is True and "no override" in j["live_ports"]
 
 
 def test_post_routes_require_token(env):
@@ -71,8 +71,9 @@ def test_post_routes_require_token(env):
 
 def test_connect_guard_and_validation(env):
     s, m, ib = env
-    st, j = call(s, "POST", "/api/ibkr/connect", {"kind": "live_tws_readonly"})
-    assert st == 400 and j["error_code"] == "refused_by_guard" and "LIVE" in j["error"] and j["info"]["fix"]
+    for k in ("live_tws_readonly", "live_gateway_readonly"):
+        st, j = call(s, "POST", "/api/ibkr/connect", {"kind": k})
+        assert st == 400 and j["error_code"] == "refused_by_guard" and "never allowed" in j["error"] and j["info"]["fix"]
     assert call(s, "POST", "/api/ibkr/connect", {"kind": "nope"})[0] == 400
     assert call(s, "POST", "/api/ibkr/connect", {})[0] == 400
     assert call(s, "POST", "/api/ibkr/connect", {"kind": "paper_tws", "host": "8.8.8.8"})[0] == 200      # host is not client-controlled: ignored
@@ -123,14 +124,14 @@ def test_portfolio_shows_read_only_account_when_connected_and_never_invents(env)
     assert mt["risk_usage"]["value"] is None and "risk policy" in mt["risk_usage"]["reason"]
     assert j["positions"] == [] and "no stock positions" in j["empty_reason"]["positions"]
     assert "Read-Only API" in j["empty_reason"]["working_orders"] and "SIMULATED" in j["note"]
-    assert "FAKE0001" not in json.dumps(j) and j["broker"]["account_masked"] == "F*****01"
+    assert "DUFAKE001" not in json.dumps(j) and j["broker"]["account_masked"] == "DU*****01"
 
 
 def test_portfolio_positions_orders_fills_mapping(env):
     s, m, ib = env
     from types import SimpleNamespace as N
     c = N(conId=1001, symbol="SYNA", primaryExchange="ARCA", exchange="SMART", currency="USD", secType="STK")
-    ib.fake_positions = [N(account="FAKE0001", contract=c, position=10.0, avgCost=100.5), N(account="FAKE0001", contract=N(conId=7, symbol="ES", secType="FUT", currency="USD", exchange="CME"), position=1.0, avgCost=5000.0)]
+    ib.fake_positions = [N(account="DUFAKE001", contract=c, position=10.0, avgCost=100.5), N(account="DUFAKE001", contract=N(conId=7, symbol="ES", secType="FUT", currency="USD", exchange="CME"), position=1.0, avgCost=5000.0)]
     ib.fake_orders = [N(contract=c, order=N(orderId=5, permId=99, action="BUY", totalQuantity=10.0, orderType="LMT", lmtPrice=99.0, auxPrice=0.0, tif="DAY", outsideRth=False),
                         orderStatus=N(status="Submitted", filled=4.0, remaining=6.0))]
     connect(s, m)
@@ -166,7 +167,7 @@ def test_account_endpoint_masks_account(env):
     assert j["connected"] is False
     connect(s, m)
     j = call(s, "GET", "/api/ibkr/account")[1]
-    assert j["connected"] and j["account_masked"] == "F*****01" and "FAKE0001" not in json.dumps(j) and j["values"]["NetLiquidation"]["value"] == "98765.43" and j["as_of"]
+    assert j["connected"] and j["account_masked"] == "DU*****01" and "DUFAKE001" not in json.dumps(j) and j["values"]["NetLiquidation"]["value"] == "98765.43" and j["as_of"]
 
 
 def test_no_order_routes_registered_by_ibkr_module(env):
@@ -205,3 +206,17 @@ def test_importing_the_server_does_not_import_ib_async():
     import subprocess
     code = "import sys; sys.path.insert(0, %r); import command_center.server, command_center.api_ibkr, command_center.api_market; sys.exit(1 if 'ib_async' in sys.modules else 0)" % str(ROOT)
     assert subprocess.run([sys.executable, "-c", code]).returncode == 0
+
+
+def test_non_paper_login_is_refused_via_api_and_no_data_is_served(env):
+    s, m, ib = env
+    ib.accounts = ["U7654321"]
+    assert call(s, "POST", "/api/ibkr/connect", {"kind": "paper_tws"})[0] == 200
+    wf(lambda: m.status()["state"] == "error")
+    j = call(s, "GET", "/api/ibkr/status")[1]
+    assert j["last_error"]["title"] == "Not a paper account: refused" and "U7654321" not in json.dumps(j)
+    assert call(s, "GET", "/api/ibkr/account")[1]["connected"] is False
+    q = call(s, "GET", "/api/quotes?symbols=SYNA:ARCA&live=1")[1]
+    assert q["quotes"][0]["freshness"] == "historical" and q["live"]["connected"] is False
+    assert call(s, "GET", "/api/portfolio")[1]["broker"]["state"] == "not_connected"
+    assert call(s, "POST", "/api/ibkr/history", {"symbols": ["SPY"], "bar_size": "1d", "years": 1})[0] == 409

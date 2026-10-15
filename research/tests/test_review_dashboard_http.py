@@ -56,7 +56,8 @@ def rawsock(s, request: bytes):
 
 
 SAMPLE_POSTS = ["/api/events", "/api/commands", "/api/prefs", "/api/audit", "/api/watchlists", "/api/watchlists/abc/items",
-                "/api/strategies/D3_V1_c2_both/state", "/api/experiments", "/api/import/preview", "/api/import/commit"]
+                "/api/strategies/D3_V1_c2_both/state", "/api/experiments", "/api/import/preview", "/api/import/commit",
+                "/api/ibkr/connect", "/api/ibkr/disconnect", "/api/ibkr/history", "/api/ibkr/history/stop"]
 
 
 def test_every_post_route_is_covered_and_requires_the_token(srv):

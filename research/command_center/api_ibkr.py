@@ -1,7 +1,7 @@
 """IBKR (read-only) API. Routes register through router.py. NO endpoint here can place, change or cancel an order.
 
 GET  /api/ibkr/status                  connection state, plain-language last error, per-feed freshness, library check
-POST /api/ibkr/connect {kind}          token. kind: paper_tws | paper_gateway (live read-only kinds only if CC_IBKR_ALLOW_LIVE_PORT_READONLY=1)
+POST /api/ibkr/connect {kind}          token. kind: paper_tws | paper_gateway (PAPER only; live ports are always refused, no override). The login must be a DU (paper) account.
 POST /api/ibkr/disconnect              token
 POST /api/ibkr/history                 token. {symbols:[...], bar_size:1d|1h|15m|5m|1m, years|duration, use_rth} -> queued job (one at a time)
 POST /api/ibkr/history/stop {id}     token

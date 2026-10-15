@@ -1,5 +1,7 @@
 # READINESS — honest status (2026-10-15)
 
+**Update 2026-10-15 (later): a PAPER-only adapter (`tradelab/brokers/ibkr_paper`) and a user-run smoke test now exist, tested ONLY against a FAKE ib_async object (tests/test_paper_*.py). It has never connected to TWS. The first real paper connection will be the user's; see docs/PAPER_SETUP.md.**
+
 **Bottom line: nothing has ever touched a real or paper broker. A real paper pilot has not been run. The user's IBKR account is unfunded, and IBKR states a paper account requires an approved and funded live account (D15). No strategy in this project has shown positive net expectancy (docs/DAILY_RESULTS.md, docs/TREND_RESULTS.md), so there is nothing worth trading yet.**
 
 ## Local tests (simulated broker, deterministic) - `python -m pytest tests/test_exec_*.py -q`
@@ -19,7 +21,29 @@ Run on 2026-10-15: **90 passed** (see the final report for the exact line). Thes
 | Static: no SDK/network imports, no live endpoints | yes | yes |
 
 ## Broker paper tests
-**None exist.** No test, script or code path connects to any broker, paper or live.
+**None have been run against a real TWS.** The adapter's tests use `tests/fake_ib_orders.py` (a hand-written stand-in for ib_async) and cannot place an order.
+The smoke test (`python -m tradelab.brokers.ibkr_paper.smoke_test`) is the first real test and is run by the USER only.
+
+### PAPER adapter - implemented and FAKE-tested (tests/test_paper_*.py)
+| area | status |
+|---|---|
+| Guard: loopback only, ports 7497/4002 only, clientId 21, DU accounts, approved-account match | implemented; tested vs fake |
+| PaperOrderPermit (service-minted, signed, expiring, single-use, bound to intent+fields) | implemented; tested |
+| Order mapping (STK, MKT/LMT/STP, DAY/GTC, account, orderRef=intent_id) | implemented; tested vs fake |
+| Callback mapping (ack != fill, dedup, out-of-order, partial, reject, lost ack -> UNCERTAIN) | implemented; tested vs fake |
+| IBKR error-code table (201,202,103,104,110,135,161,200,354,399,504,1100-1102) | implemented; tested as a table and through the fake; real TWS ordering/semantics unverified |
+| Reconnect reconciliation (reqAllOpenOrders/reqExecutions/reqPositions) | implemented; tested vs fake |
+| what-if margin pre-check | implemented; tested vs fake; real OrderState formats UNVERIFIED |
+| Smoke test happy path + abort paths | tested vs fake with fake clock/key; NEVER run for real |
+| Static guard: ib_async only in the two allowed places; execution/ pure | tested |
+
+### Still NOT done / unverified after this step
+- Any real TWS paper connection, fill, commission report or what-if output. The fake encodes MY understanding of ib_async/TWS behaviour; it can be wrong.
+- ib_async 2.1.0 itself was not installed or imported in the test environment (BSD-2-Clause per its wheel metadata; the wheel was downloaded to inspect the API names only).
+- Real-time market-data entitlement for the paper account; shortability data (stays None, shorting blocked); half-day/holiday calendar.
+- IBKR Canada confirmation that API orders are allowed for the intended products; a funded live account is required for a paper account (D15).
+- Optional dependency declaration in pyproject (`paper = ["ib_async==2.1.0"]`) is a coordinator-owned change; docs say `pip install ib_async==2.1.0`.
+
 
 ## NOT done
 - Real broker adapter (and its review). The data-only wrapper in `command_center/ibkr` is separate, read-only and exposes no orders.

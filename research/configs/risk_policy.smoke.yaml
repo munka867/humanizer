@@ -1,0 +1,24 @@
+# Risk policy for the PAPER smoke test ONLY (python -m tradelab.brokers.ibkr_paper.smoke_test). Tiny on purpose.
+# The smoke test ALSO hard-codes these caps (1 share, SPY conId 756733) so editing this file cannot scale it up.
+# Changing this file changes its sha256, which invalidates any signed approval created for it.
+schema: risk_policy.v1
+version: "smoke-1"
+timezone: America/New_York
+limits:
+  max_risk_per_trade: 2             # 1 share x ~1.00 planned stop distance
+  max_daily_loss: 20
+  max_drawdown: 100
+  max_gross_exposure: 2000          # one SPY share is a few hundred to ~1000 dollars
+  max_net_exposure: 2000
+  max_correlated_exposure: 2000
+  correlation_threshold: 0.7
+  max_orders_per_minute: 4
+  max_orders_per_day: 8             # rolling 24 h; one smoke run uses 2 orders
+  max_spread_bps: 10
+  max_slippage_bps: 15              # marketable limit a few cents through the quote
+  max_data_age_seconds: 20          # real-time quotes only; delayed data will be refused as stale
+  min_account_headroom: 0.3
+  allow_short: false
+  require_margin_check: true
+instruments:                        # SPY only, regular hours only (America/New_York)
+  - {con_id: 756733, symbol: SPY, multiplier: 1, max_position_qty: 1, allow_short: false, sessions: [["09:35", "15:55"]]}

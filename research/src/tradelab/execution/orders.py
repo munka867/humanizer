@@ -20,12 +20,17 @@ WORKING = {SUBMITTING, ACKED, PARTIAL, CANCEL_PENDING, UNCERTAIN}   # may still 
 TRANSITIONS = {
     NEW: {SUBMITTING},
     SUBMITTING: {ACKED, REJECTED, UNCERTAIN, PARTIAL, FILLED},          # PARTIAL/FILLED: fill callback overtook the ack
-    ACKED: {PARTIAL, FILLED, CANCEL_PENDING, REJECTED, CANCELED},
-    PARTIAL: {PARTIAL, FILLED, CANCEL_PENDING, CANCELED},
-    CANCEL_PENDING: {CANCELED, FILLED, PARTIAL, ACKED},                  # ACKED: cancel rejected / too late
+    ACKED: {PARTIAL, FILLED, CANCEL_PENDING, REJECTED, CANCELED, UNCERTAIN},
+    PARTIAL: {PARTIAL, FILLED, CANCEL_PENDING, CANCELED, UNCERTAIN},
+    CANCEL_PENDING: {CANCELED, FILLED, PARTIAL, ACKED, UNCERTAIN},                  # ACKED: cancel rejected / too late
     UNCERTAIN: {ACKED, PARTIAL, FILLED, REJECTED, CANCELED},             # ONLY via reconciliation or a late callback
     FILLED: set(), CANCELED: set(), REJECTED: set(),
 }
+
+
+def client_order_id_for(intent_id: str) -> str:
+    """Deterministic client order id (attempt 1). A broker-side orderRef = intent_id lets reconciliation recompute it."""
+    return f"{intent_id[:20]}-1"
 
 
 class IllegalTransition(RuntimeError):
@@ -50,7 +55,7 @@ class OrderBook:
 
     # ---- writes
     def create(self, intent, now) -> str:
-        coid = f"{intent['intent_id'][:20]}-1"
+        coid = client_order_id_for(intent["intent_id"])
         with tx(self.conn) as c:
             c.execute("INSERT INTO orders(client_order_id,intent_id,state,qty,strategy_id,con_id,side,purpose,order_type,limit_px,stop_px,"
                       "created_utc,updated_utc) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",

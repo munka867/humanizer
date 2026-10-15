@@ -31,7 +31,7 @@ def test_panel_copy_is_honest():
     for needle in ("Not yet verified against a real TWS/Gateway", "SIMULATED IBKR (test fixture)", "Read-only", "Execution: none", "data/processed/", "never touched or overwritten",
                    "pip install ib_async==2.1.0", "ibkr.doctor", "Read-Only API", "127.0.0.1", "IBKR_SETUP.md", "total is an estimate", "paper"):
         assert needle in PANEL, needle
-    assert "live ports stay blocked" in PANEL.lower()
+    assert "always refused" in PANEL and "no override" in PANEL and "DU" in PANEL and "CC_IBKR_ALLOW_LIVE" not in PANEL
 
 
 def test_panel_shows_plain_language_error_with_fix():

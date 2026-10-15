@@ -16,6 +16,7 @@ from command_center import api_market, router  # noqa: E402
 from command_center.server import make_server  # noqa: E402
 
 TOKEN = "test-token"
+CC = ROOT / "command_center"
 
 # date, open, high, low, close, volume  (SYNTHETIC_SYNA; session dates in New York, ts_open 13:30 UTC = EDT)
 SYNA = [("2026-09-28", 100, 105, 99, 104, 10), ("2026-09-29", 104, 108, 103, 107, 20), ("2026-09-30", 107, 110, 102, 103, 30),

@@ -13,7 +13,7 @@ import hashlib
 import json
 import os
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable, Iterable
 
@@ -21,6 +21,7 @@ from tradelab.execution.common import canon, parse_iso, sha256_hex, utcnow
 
 KEY_ENV = "CC_APPROVAL_KEY"
 APPROVED_STATE = "approved_paper"
+MAX_VALID_HOURS = 24.0
 APPROVAL_FIELDS = ("account_id", "instruments", "strategy_id", "strategy_version", "capital_allocation",
                    "risk_policy_sha256", "issued_utc", "expires_utc")
 
@@ -77,7 +78,12 @@ def verify_approval(path: Path, key: bytes, *, now_utc: datetime) -> dict:
         mac_ok = False
     if not mac_ok:
         raise ModeDenied("PAPER refused: approval HMAC does not verify (tampered or wrong key)")
+    # P7-08: the CLI limits are enforced here too (a record made directly with make_approval and the key obeys them as well)
+    if not str(payload["account_id"]).startswith("DU"):
+        raise ModeDenied("PAPER refused: approval is not for a paper (DU) account")
     issued, expires = parse_iso(payload["issued_utc"]), parse_iso(payload["expires_utc"])
+    if not (timedelta(0) < expires - issued <= timedelta(hours=MAX_VALID_HOURS)):
+        raise ModeDenied(f"PAPER refused: approval validity must be > 0 and at most {MAX_VALID_HOURS:g} hours")
     if now_utc < issued:
         raise ModeDenied("PAPER refused: approval issued in the future")
     if now_utc >= expires:

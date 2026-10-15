@@ -14,7 +14,7 @@ ENV = {KEY_ENV: KEY.decode()}
 
 
 def approval_file(tmp_path, **over):
-    kw = dict(account_id="SIM-0001", instruments=[SPY, QQQ], strategy_id="stratA", strategy_version="v1", capital_allocation="5000",
+    kw = dict(account_id="DUSIM0001", instruments=[SPY, QQQ], strategy_id="stratA", strategy_version="v1", capital_allocation="5000",
               risk_policy_sha256=sha256_hex(POLICY.read_bytes()), issued_utc=T0 - timedelta(hours=1), expires_utc=T0 + timedelta(hours=8))
     kw.update(over)
     p = tmp_path / "paper_approval.json"
@@ -25,7 +25,7 @@ def approval_file(tmp_path, **over):
 def paper_kwargs(tmp_path, **over):
     kw = dict(broker_is_simulated=True, registry_state=lambda s, v: "approved_paper", strategy_id="stratA", strategy_version="v1",
               instruments=[SPY], risk_policy_path=POLICY, approval_path=over.get("approval_path") or approval_file(tmp_path),
-              broker_account_id="SIM-0001", now_utc=T0, env=ENV)
+              broker_account_id="DUSIM0001", now_utc=T0, env=ENV)
     kw.update(over)
     return kw
 
@@ -41,7 +41,7 @@ def test_live_is_always_refused(tmp_path):
 
 def test_paper_can_be_enabled_only_when_every_gate_holds(tmp_path):
     p = assert_may_submit(Mode.PAPER, **paper_kwargs(tmp_path))
-    assert p["account_id"] == "SIM-0001"
+    assert p["account_id"] == "DUSIM0001"
 
 
 def test_research_agent_without_key_cannot_enable_paper(tmp_path):
@@ -53,7 +53,7 @@ def test_research_agent_without_key_cannot_enable_paper(tmp_path):
         assert_may_submit(Mode.PAPER, **paper_kwargs(tmp_path, approval_path=forged, env={KEY_ENV: "agent-guess"}))
 
 
-@pytest.mark.parametrize("field,value", [("account_id", "SIM-9999"), ("instruments", [SPY, QQQ, 5]), ("strategy_id", "other"),
+@pytest.mark.parametrize("field,value", [("account_id", "DUSIM9999"), ("instruments", [SPY, QQQ, 5]), ("strategy_id", "other"),
                                          ("strategy_version", "v2"), ("capital_allocation", "500000"),
                                          ("risk_policy_sha256", "0" * 64), ("issued_utc", "2020-01-01T00:00:00+00:00"),
                                          ("expires_utc", "2099-01-01T00:00:00+00:00")])
@@ -145,8 +145,9 @@ def test_service_in_paper_mode_blocks_orders_without_valid_approval(tmp_path):
 
 
 def test_service_in_paper_mode_with_all_gates_reaches_simulated_broker(tmp_path):
-    svc, b, _ = make(tmp_path, Mode.PAPER, registry_state=lambda s, v: "approved_paper", risk_policy_path=POLICY,
-                     approval_path=approval_file(tmp_path), env=ENV)
+    from tradelab.execution.broker import SimulatedBroker
+    svc, b, _ = make(tmp_path, Mode.PAPER, broker=SimulatedBroker(account_id="DUSIM0001"), registry_state=lambda s, v: "approved_paper",
+                     risk_policy_path=POLICY, approval_path=approval_file(tmp_path), env=ENV)
     svc.start()
     assert svc.propose(entry()).status == "SUBMITTED"
 

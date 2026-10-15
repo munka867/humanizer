@@ -91,7 +91,7 @@ def test_uncertain_exit_keeps_capacity_and_blocks_a_second_exit(tmp_path):
 
 
 def test_multiple_instruments_do_not_share_capacity(tmp_path):
-    svc, b, _ = make(tmp_path)
+    svc, b, _ = make(tmp_path, correlations={(SPY, QQQ): Dc("0.9")})   # pending orders in other instruments now need a correlation too (P7-04)
     svc.start()
     assert svc.propose(entry("a", qty=10)).status == "SUBMITTED" and svc.propose(entry("b", qty=10, con=QQQ)).status == "SUBMITTED"
     b.advance(SPY, [Dc(100)]); b.advance(QQQ, [Dc(100)]); svc.process_events()
@@ -132,7 +132,6 @@ class SlowCancelBroker(SimulatedBroker):
             super().cancel(c)
 
 
-@pytest.mark.xfail(strict=True, reason="P7-01: flatten cancels the protective stop FIRST and only then asks for the exit; if the cancel ack is slow the exit is refused (NOT_REDUCING), the ack then removes the stop, and the position sits unprotected with no exit working until the operator calls flatten again")
 def test_flatten_never_leaves_a_position_without_stop_or_exit(tmp_path):
     b = SlowCancelBroker()
     svc, _, clock = make(tmp_path, broker=b)
@@ -145,7 +144,6 @@ def test_flatten_never_leaves_a_position_without_stop_or_exit(tmp_path):
     assert svc.positions() == {SPY: Dc(10)} and working, "position +10 with NO working stop or exit order"
 
 
-@pytest.mark.xfail(strict=True, reason="P7-02: the PAPER mode gate (expired approval, clock skew, latched policy block) is evaluated AFTER flatten has already cancelled the stop; the exit is refused and the position is left naked")
 def test_flatten_does_not_cancel_the_stop_when_the_exit_would_be_refused(tmp_path):
     svc, ad, fake, clock, port = make_paper(tmp_path)
     svc.start()
@@ -160,7 +158,6 @@ def test_flatten_does_not_cancel_the_stop_when_the_exit_would_be_refused(tmp_pat
     assert exit_sent or not stop_cancelled, f"stop cancelled={stop_cancelled}, exit sent={exit_sent}, report={rep['instruments']}"
 
 
-@pytest.mark.xfail(strict=True, reason="P7-03: a cancel request that fails on a disconnect leaves the order in CANCEL_PENDING forever: reconcile() does not move it back, flatten only re-cancels ACKED/PARTIAL orders, and the capacity rule counts it, so every later exit is refused (livelock; the stop still sits at the broker)")
 def test_flatten_recovers_after_a_disconnect_during_the_cancel(tmp_path):
     svc, b, _ = long_pos(tmp_path, 10)
     assert svc.propose(stop("s1", 10)).status == "SUBMITTED"; svc.process_events()
@@ -174,14 +171,13 @@ def test_flatten_recovers_after_a_disconnect_during_the_cancel(tmp_path):
 
 
 # ======================================================== exposure checks and pending orders
-@pytest.mark.xfail(strict=True, reason="P7-04: 'pending same-side orders count toward exposure' is implemented per INSTRUMENT only; unfilled orders in OTHER instruments are ignored, so two orders submitted before either fills exceed max_gross_exposure (and the correlated-exposure cap)")
 def test_pending_orders_in_other_instruments_count_toward_gross_exposure(tmp_path):
-    svc, b, _ = make(tmp_path, quote_px="400")
+    svc, b, _ = make(tmp_path, quote_px="400", correlations={(SPY, QQQ): Dc("0.9")})
     svc.start()
     r1 = svc.propose(entry("a", qty=30, stop="399.5"))
     r2 = svc.propose(entry("b", qty=30, stop="399.5", con=QQQ))
     assert r1.status == "SUBMITTED"
-    assert r2.status == "BLOCKED", f"gross would be 24,000 against a 20,000 policy cap (and correlated 24,000 against 15,000) ({r2.reasons})"
+    assert r2.status == "BLOCKED" and any(x in r2.reasons for x in ("MAX_GROSS_EXPOSURE", "MAX_CORRELATED_EXPOSURE")), f"gross would be 24,000 against a 20,000 policy cap (and correlated 24,000 against 15,000) ({r2.reasons})"
 
 
 # ======================================================== (3) acknowledgements
@@ -232,7 +228,6 @@ class ClaimsSimulated:
     def __getattr__(self, n): return getattr(self.inner, n)
 
 
-@pytest.mark.xfail(strict=True, reason="P7-05: the lock file name for a broker that CLAIMS is_simulated=True gets a per-object suffix and goes to /tmp, so in PAPER mode two services can drive one real account (a wrapper/fake only has to set is_simulated)")
 def test_paper_account_lock_cannot_be_dodged_by_claiming_to_be_simulated(tmp_path):
     fake = FakeIB()
     w1, w2 = ClaimsSimulated(fresh_adapter(fake)), ClaimsSimulated(fresh_adapter(fake))
@@ -284,7 +279,6 @@ def test_order_ref_roundtrip_and_every_tamper_is_foreign():
     assert PermitAuthority(None).make_ref(iid) is None and PermitAuthority(None).parse_ref(ref) is None
 
 
-@pytest.mark.xfail(strict=True, reason="P7-07: after the approval key is rotated, our still-working GTC stop carries the OLD tag, is seen as FOREIGN, and reconcile() marks the ledger order CANCELED ('not at broker') while it is still live: capacity is released and an exit can double-close")
 def test_key_rotation_does_not_release_capacity_of_still_working_orders(tmp_path):
     svc1, ad1, fake, clock, _ = make_paper(tmp_path, name="one.db")
     svc1.start()
@@ -369,7 +363,6 @@ def datetime_now():
     return datetime.now(timezone.utc)
 
 
-@pytest.mark.xfail(strict=True, reason="P7-08: the CLI limits (DU only, <= 24 h) are CLI-only; verify_approval itself accepts a signed record for a non-DU account or a 100-year validity (made with make_approval and the key), so the service-side check relies on the adapter alone")
 def test_verify_approval_enforces_the_same_limits_as_the_cli(tmp_path):
     from datetime import datetime, timezone
     now = datetime.now(timezone.utc)
@@ -418,7 +411,6 @@ def test_closure_extraction_cannot_forge_a_permit(tmp_path):
 
 
 # ======================================================== more regressions of the fixes
-@pytest.mark.xfail(strict=True, reason="P7-09: reducing orders are now subject to the order-frequency limits, so after max_orders_per_day (rolling ~24-48 h window) a protective stop for an OPEN position is refused; only the operator flatten is exempt")
 def test_protective_stop_is_not_starved_by_the_daily_order_limit(tmp_path):
     pol = tmp_path / "pol.yaml"
     pol.write_text(POLICY.read_text().replace("max_orders_per_day: 50", "max_orders_per_day: 3").replace("max_orders_per_minute: 5", "max_orders_per_minute: 100"))
@@ -433,7 +425,6 @@ def test_protective_stop_is_not_starved_by_the_daily_order_limit(tmp_path):
     assert r.status == "SUBMITTED", f"open +3 position cannot be protected: {r.reasons}"
 
 
-@pytest.mark.xfail(strict=True, reason="P7-10: a FOREIGN working exit at the broker (e.g. a stop placed by hand in TWS) is not counted as reducing capacity; a ledger exit for the full position is accepted and both can fill -> short. Foreign orders block entries but not exits")
 def test_foreign_working_exit_counts_against_reducing_capacity(tmp_path):
     svc, b, _ = long_pos(tmp_path, 10)
     b.inject_foreign_order(SPY, -1, 10, "STP", "95")

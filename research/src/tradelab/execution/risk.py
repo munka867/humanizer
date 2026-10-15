@@ -19,7 +19,7 @@ from zoneinfo import ZoneInfo
 import yaml
 
 from tradelab.execution.common import D, canon, iso, sha256_hex
-from tradelab.execution.intents import ENTRY, Proposal
+from tradelab.execution.intents import ENTRY, PROTECTIVE, Proposal
 
 DEC_KEYS = ("max_risk_per_trade", "max_daily_loss", "max_drawdown", "max_gross_exposure", "max_net_exposure",
             "max_correlated_exposure", "correlation_threshold", "max_spread_bps", "max_slippage_bps", "min_account_headroom")
@@ -198,7 +198,10 @@ class RiskEngine:
             sub: list = []
             self._check_new_exposure(p, x, qty, sub, details)
             reasons.extend(sub)
-        if x.now_utc is not None and not x.frequency_exempt:
+        # P7-09: a strictly reducing PROTECTIVE order can only shrink exposure (bounded by the position), so the order-frequency limits
+        # never starve a stop. Entries, plain exits (the operator flatten is exempt separately) and anything not truly reducing stay limited.
+        protective_reducing = reducing and p.purpose == PROTECTIVE
+        if x.now_utc is not None and not x.frequency_exempt and not protective_reducing:
             self._check_frequency(x, reasons)
         return RiskDecision(decision_id=sha256_hex(canon([intent_id, iso(x.now_utc), reasons, details]))[:24],
                             allowed=not reasons, reducing=reducing, reasons=tuple(reasons), policy_hash=pol.sha256,
@@ -285,6 +288,12 @@ class RiskEngine:
         # ---- exposure (notional = |qty| * mid * multiplier, using quotes for every held instrument)
         pos_after = dict(x.positions)
         pos_after[p.con_id] = post
+        # P7-04: unfilled orders in OTHER instruments count too (worst case per instrument: whichever fill direction grows |position|)
+        for ocid in {c for (c, _s) in (x.working_same_side or {}) if c != p.con_id}:
+            base = x.positions.get(ocid, Decimal(0))
+            up = base + (x.working_same_side or {}).get((ocid, 1), Decimal(0))
+            dn = base - (x.working_same_side or {}).get((ocid, -1), Decimal(0))
+            pos_after[ocid] = up if abs(up) >= abs(dn) else dn
         notion, missing = {}, []
         for cid, qv in pos_after.items():
             if qv == 0:

@@ -17,9 +17,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from tradelab.execution.common import sha256_hex, utcnow
-from tradelab.execution.modes import KEY_ENV, make_approval
-
-MAX_VALID_HOURS = 24.0
+from tradelab.execution.modes import KEY_ENV, MAX_VALID_HOURS, make_approval
 
 
 def build_record(key: bytes, args) -> dict:

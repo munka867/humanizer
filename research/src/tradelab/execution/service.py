@@ -116,7 +116,7 @@ class ExecutionService:
             if self.mode is Mode.PAPER:
                 raise ModeDenied("PAPER refused: cannot determine the account id for the per-account lock")
             return
-        simulated = bool(getattr(self.broker, "is_simulated", False))
+        simulated = bool(getattr(self.broker, "is_simulated", False)) and self.mode is not Mode.PAPER     # P7-05: PAPER ignores the claim
         d = Path(self._lock_dir or (self._env if self._env is not None else os.environ).get("TRADELAB_LOCK_DIR") or
                  (Path(tempfile.gettempdir()) / "tradelab_sim_locks" if simulated else Path.home() / ".tradelab_locks"))
         d.mkdir(parents=True, exist_ok=True)
@@ -165,7 +165,8 @@ class ExecutionService:
 
     # ------------------------------------------------------------ reconciliation
     def reconcile(self) -> dict:
-        """Compare broker open orders / executions / positions with the ledger. Never cancels anything."""
+        """Compare broker open orders / executions / positions with the ledger. It never cancels anything on its own account; the only
+        cancels it may re-send are those that complete an operator-requested flatten (and only if the exit is still allowed)."""
         now = self.clock()
         found = []
         try:
@@ -184,11 +185,20 @@ class ExecutionService:
                 continue
             self.orders.apply_execution(self._ev_to_exec(ev), now)
         by_coid = {o.client_order_id: o for o in b_orders}
+        # P7-07: a ledger order whose broker order id is live at the broker but whose orderRef we cannot verify (e.g. the approval key was
+        # rotated) is treated as LIVE/unknown, never as cancelled: it keeps its capacity and entries stay blocked until the operator resolves it.
+        foreign_by_bid = {o.broker_order_id: o for o in b_orders if o.client_order_id.startswith("FOREIGN-")}
+        matched_foreign: set = set()
         for row in self.orders.by_state(O.SUBMITTING, O.UNCERTAIN, O.ACKED, O.PARTIAL, O.CANCEL_PENDING):
             coid = row["client_order_id"]
             bo = by_coid.get(coid)
             fresh = self.orders.get(coid)["state"]
             if fresh in O.TERMINAL:
+                continue
+            if bo is None and row["broker_order_id"] and row["broker_order_id"] in foreign_by_bid:
+                matched_foreign.add(row["broker_order_id"])
+                found.append(f"order {coid} is live at the broker but its orderRef is unverifiable (approval key rotated?)")
+                self.incident("ORDER_REF_UNVERIFIABLE", "high", {"client_order_id": coid, "broker_order_id": row["broker_order_id"]})
                 continue
             if bo is not None:
                 if fresh in (O.SUBMITTING, O.UNCERTAIN):
@@ -203,8 +213,12 @@ class ExecutionService:
                     self.orders.transition(coid, O.UNCERTAIN, now, "reconcile: outcome of submit unknown")
                 self.orders.transition(coid, O.CANCELED, now, "reconciled: not working at broker")
                 self.incident("ORDER_NOT_AT_BROKER", "medium", {"client_order_id": coid, "was": fresh})
+        foreign_live = []
         for o in b_orders:
-            if self.orders.get(o.client_order_id) is None:
+            if self.orders.get(o.client_order_id) is None and o.broker_order_id not in matched_foreign:
+                rem = D(o.qty) - D(o.filled)
+                if rem > 0:     # P7-10: an unknown working order may still fill; it counts as live capacity/exposure
+                    foreign_live.append({"con_id": int(o.con_id), "side": int(o.side), "rem": str(rem)})
                 found.append(f"unknown broker order {o.broker_order_id}")
                 self.incident("UNKNOWN_BROKER_ORDER", "high", {"broker_order_id": o.broker_order_id, "con_id": o.con_id})
         ledger_pos = self.orders.positions()
@@ -220,10 +234,12 @@ class ExecutionService:
         if corr:
             found.append("execution corrections need human review")
             self.incident("EXECUTION_CORRECTION_REVIEW", "high", {"exec_ids": corr[:10]})
+        kv_set(self.conn, "foreign_live", foreign_live)
         kv_set(self.conn, "mismatch_cons", sorted(mism))
         kv_set(self.conn, "ack_cons", [c for c in kv_get(self.conn, "ack_cons", []) if c in mism])
         kv_set(self.conn, "recon_blocked", bool(found))
         self.reconciled = True
+        self._retry_flatten_cancels()
         return {"ok": not found, "findings": found}
 
     def start(self) -> dict:
@@ -236,7 +252,7 @@ class ExecutionService:
                 "con_id": ev.con_id, "side": ev.side, "qty": ev.qty, "price": ev.price, "ts": ev.ts}
 
     # ------------------------------------------------------------ broker events
-    def process_events(self) -> int:
+    def process_events(self, _resume: bool = True) -> int:
         now = self.clock()
         try:
             events = self.broker.poll_events()
@@ -278,6 +294,8 @@ class ExecutionService:
             except O.IllegalTransition as e:
                 self.incident("ILLEGAL_TRANSITION", "medium", {"error": str(e), "kind": ev.kind})
         self._cancel_orphan_protectives()
+        if _resume:
+            self._resume_pending_flattens(throttle=True)
         return len(events)
 
     def check_timeouts(self) -> list[str]:
@@ -299,6 +317,8 @@ class ExecutionService:
                 self._request_cancel(row, "orphan protective: position flat")
 
     def _request_cancel(self, row, why):
+        """Cancel REQUEST. On a send failure the order stays CANCEL_PENDING (it may or may not be cancelled: it keeps holding reducing
+        capacity), and flatten / reconcile re-send the request (P7-03). Re-requesting an order already CANCEL_PENDING is allowed."""
         coid = row["client_order_id"]
         now = self.clock()
         try:
@@ -331,6 +351,9 @@ class ExecutionService:
             rem = D(r["qty"]) - D(r["filled_qty"])
             if rem > 0:
                 out[(r["con_id"], r["side"])] = out.get((r["con_id"], r["side"]), Decimal(0)) + rem
+        for f in kv_get(self.conn, "foreign_live", []):       # broker orders this ledger does not own still count (conservative)
+            k = (int(f["con_id"]), int(f["side"]))
+            out[k] = out.get(k, Decimal(0)) + D(f["rem"])
         return out
 
     def _risk_inputs(self, p: Proposal, frequency_exempt: bool = False) -> RiskInputs:
@@ -360,7 +383,7 @@ class ExecutionService:
         except (BrokerDisconnected, BrokerTimeout):
             pass   # leaves fields None => MISSING_INPUT => new exposure blocked
         quotes = {}
-        for cid in set(x.positions or {}) | {p.con_id}:
+        for cid in set(x.positions or {}) | {p.con_id} | {c for (c, _s) in (x.working_same_side or {})}:
             try:
                 q = self.quote_source(cid)
             except Exception:      # any quote-source failure = missing input = new exposure blocked
@@ -427,26 +450,30 @@ class ExecutionService:
             return SubmitResult(iid, "SHADOWED", (), False, None, decision)
         # mode gate immediately before the broker port (re-evaluated every time: approvals expire)
         try:
-            gate_now = now
-            if self.mode is Mode.PAPER:
-                if self._paper_block:
-                    raise ModeDenied(self._paper_block)
-                try:
-                    bt = self.broker.server_time()
-                except Exception as e:
-                    raise ModeDenied(f"PAPER refused: broker time unavailable ({type(e).__name__})") from e
-                if abs((bt - now).total_seconds()) > self._max_skew:
-                    raise ModeDenied(f"PAPER refused: local clock and broker time differ by more than {self._max_skew}s")
-                gate_now = max(now, bt)               # approval expiry is judged on the later of the two clocks
-            approval = assert_may_submit(self.mode, broker_is_simulated=getattr(self.broker, "is_simulated", False),
-                              registry_state=self._registry_state, strategy_id=p.strategy_id, strategy_version=p.strategy_version,
-                              instruments=[p.con_id], risk_policy_path=self._policy_path, approval_path=self._approval_path,
-                              broker_account_id=self._safe_account_id(), now_utc=gate_now, env=self._env,
-                              engine_policy_sha256=self.risk.policy.sha256 if self.mode is Mode.PAPER else None)
+            approval = self._mode_gate(p, now)
         except ModeDenied as e:
             self.intents.set_status(iid, "BLOCKED", decision.decision_id)
             return SubmitResult(iid, "BLOCKED", (f"MODE_GATE:{e}",), False, None, decision)
         return self._send(iid, row, p, decision, now, approval)
+
+    def _mode_gate(self, p: Proposal, now):
+        """Raises ModeDenied unless an order for `p` may be sent now. Returns the verified approval (PAPER) or None."""
+        gate_now = now
+        if self.mode is Mode.PAPER:
+            if self._paper_block:
+                raise ModeDenied(self._paper_block)
+            try:
+                bt = self.broker.server_time()
+            except Exception as e:
+                raise ModeDenied(f"PAPER refused: broker time unavailable ({type(e).__name__})") from e
+            if abs((bt - now).total_seconds()) > self._max_skew:
+                raise ModeDenied(f"PAPER refused: local clock and broker time differ by more than {self._max_skew}s")
+            gate_now = max(now, bt)               # approval expiry is judged on the later of the two clocks
+        return assert_may_submit(self.mode, broker_is_simulated=getattr(self.broker, "is_simulated", False),
+                                 registry_state=self._registry_state, strategy_id=p.strategy_id, strategy_version=p.strategy_version,
+                                 instruments=[p.con_id], risk_policy_path=self._policy_path, approval_path=self._approval_path,
+                                 broker_account_id=self._safe_account_id(), now_utc=gate_now, env=self._env,
+                                 engine_policy_sha256=self.risk.policy.sha256 if self.mode is Mode.PAPER else None)
 
     def _safe_account_id(self):
         try:
@@ -527,45 +554,149 @@ class ExecutionService:
         self.incident("EMERGENCY_CLEARED", "info", {"operator": operator, "note": note})
 
     def flatten_strategy_positions(self, strategy_id: str, version: str | None = None) -> dict:
-        """Send risk-REDUCING market orders for the strategy's fill-derived positions. Returns what ACTUALLY happened after one event
-        pass: per instrument requested qty, filled qty, residual exposure, status. It may fail or fill poorly; a stop order does not
-        cap loss (gaps, slippage); nothing here claims otherwise.
+        """Send risk-REDUCING market orders for the strategy's fill-derived positions. Returns what ACTUALLY happened: per instrument
+        requested qty, filled qty, residual exposure, status. It may fail or fill poorly; a stop order does not cap loss (gaps,
+        slippage); nothing here claims otherwise.
 
-        Reducing capacity counts every live exit, so a flatten can never stack on top of a working stop/exit and flip the position:
-        for each instrument the strategy's OTHER working exit/protective orders get a cancel REQUEST first, and the flatten order is
-        accepted only once the cancel acks have freed capacity (the stop keeps protecting until then). If it is blocked, the report says so
-        and the operator calls flatten again after the acks. A second flatten while the first is live is blocked by the same rule."""
+        Order of operations per instrument (P7-01/P7-02): (1) DRY-RUN the exit (risk capacity with this strategy's own stops/exits
+        freed, plus the mode gate); if it would be refused NOTHING is cancelled and the stop keeps protecting (result REFUSED_STOPS_KEPT,
+        critical incident). (2) Otherwise the flatten is persisted as PENDING and the stops get a cancel REQUEST. (3) The exit is sent as
+        soon as the cancel acks have freed capacity, in this call if they arrive in time, otherwise automatically from process_events() /
+        reconcile(); a failed cancel (disconnect) is re-sent by every later flatten() or reconcile(). Calling flatten again is always safe:
+        a live flatten exit blocks any second one, so a position cannot flip."""
         pos = self.orders.positions(strategy_id)
         if version is None:      # the flatten order belongs to the strategy version that opened the position (approvals bind the version)
             r = self.conn.execute("SELECT strategy_version FROM intents WHERE strategy_id=? ORDER BY created_utc DESC, rowid DESC LIMIT 1", (strategy_id,)).fetchone()
             version = r["strategy_version"] if r else "flatten"
-        seq = int(kv_get(self.conn, "flatten_seq", 0)) + 1
-        kv_set(self.conn, "flatten_seq", seq)
         report = {"strategy_id": strategy_id, "instruments": {}}
-        sent = {}
-        for cid in pos:
-            for row in self.conn.execute(
-                    "SELECT o.client_order_id FROM orders o JOIN intents i ON i.intent_id=o.intent_id WHERE o.strategy_id=? AND o.con_id=? "
-                    "AND o.state IN ('ACKED','PARTIALLY_FILLED') AND o.purpose IN ('protective','exit') AND i.signal_id NOT LIKE 'flatten-%'",
-                    (strategy_id, cid)).fetchall():
-                self._request_cancel(self.orders.get(row["client_order_id"]), "flatten: free reducing capacity")
-        self.process_events()
+        refused: dict = {}
         for cid, q in pos.items():
-            p = Proposal(strategy_id, version, f"flatten-{seq}", cid, str(cid), -1 if q > 0 else 1, abs(q), "MKT", purpose=EXIT)
-            r = self._propose(p, True)
-            sent[cid] = (r, abs(q))
-        self.process_events()
+            rows = self._flatten_cancelable(strategy_id, cid)
+            if rows:
+                reasons = self._exit_precheck(strategy_id, version, cid, q, rows)
+                if reasons:
+                    refused[cid] = reasons
+                    self.incident("FLATTEN_REFUSED_STOPS_KEPT", "critical", {"strategy_id": strategy_id, "con_id": cid, "reasons": reasons})
+                    continue
+            self._set_pending_flatten(strategy_id, version, cid, True)
+            for row in rows:
+                self._request_cancel(self.orders.get(row["client_order_id"]), "flatten: free reducing capacity")
+        self.process_events(_resume=False)
+        results = self._resume_pending_flattens(throttle=False, only_strategy=strategy_id)
+        self.process_events(_resume=False)
         after = self.orders.positions(strategy_id)
-        for cid, (r, req) in sent.items():
+        for cid, q in pos.items():
+            r = results.get(cid)
             resid = after.get(cid, Decimal(0))
-            order = self.orders.get(r.client_order_id) if r.client_order_id else None
-            report["instruments"][cid] = {"requested": str(req), "result": r.status, "reasons": list(r.reasons),
+            order = self.orders.get(r.client_order_id) if r is not None and r.client_order_id else None
+            if cid in refused:
+                status, reasons = "REFUSED_STOPS_KEPT", refused[cid]
+            elif r is None:
+                status, reasons = "PENDING_CANCEL_ACK", ["WAITING_FOR_STOP_CANCEL_ACK"]
+            else:
+                status, reasons = r.status, list(r.reasons)
+            report["instruments"][cid] = {"requested": str(abs(q)), "result": status, "reasons": list(reasons),
                                           "order_state": order["state"] if order else None,
                                           "filled": str(D(order["filled_qty"])) if order else "0", "residual_position": str(resid),
                                           "complete": resid == 0}
         report["residual_exposure"] = {str(k): str(v) for k, v in after.items()}
         report["complete"] = not after
         return report
+
+    # ---- flatten helpers (P7-01/02/03)
+    def _flatten_cancelable(self, strategy_id: str, cid: int):
+        """This strategy's own stops/exits on `cid` that a flatten must replace (never its own earlier flatten exits)."""
+        return self.conn.execute(
+            "SELECT o.* FROM orders o JOIN intents i ON i.intent_id=o.intent_id WHERE o.strategy_id=? AND o.con_id=? "
+            "AND o.state IN ('ACKED','PARTIALLY_FILLED','CANCEL_PENDING') AND o.purpose IN ('protective','exit') "
+            "AND i.signal_id NOT LIKE 'flatten-%' ORDER BY o.order_id", (strategy_id, cid)).fetchall()
+
+    def _flatten_exit_proposal(self, strategy_id, version, cid, q, seq) -> Proposal:
+        return Proposal(strategy_id, version, f"flatten-{seq}", cid, str(cid), -1 if q > 0 else 1, abs(q), "MKT", purpose=EXIT)
+
+    def _exit_precheck(self, strategy_id, version, cid, q, rows) -> list[str]:
+        """Would the flatten exit be accepted once `rows` (our own stops/exits) are cancelled? Returns refusal reasons ([] = allowed).
+        Evaluates the risk engine with that capacity freed AND the mode gate, without cancelling or sending anything."""
+        p = self._flatten_exit_proposal(strategy_id, version, cid, q, "precheck")
+        now = self.clock()
+        try:
+            x = self._risk_inputs(p, True)
+            key = (p.con_id, p.side)
+            freed = sum((D(r["qty"]) - D(r["filled_qty"]) for r in rows), Decimal(0))
+            w = dict(x.working_same_side or {})
+            w[key] = max(Decimal(0), w.get(key, Decimal(0)) - freed)
+            x.working_same_side = w
+            reasons = list(self.risk.evaluate(p, x, None).reasons)
+            if any(r["con_id"] == cid for r in self.orders.by_state(O.UNCERTAIN)):
+                reasons.append("UNCERTAIN_ORDER_SAME_INSTRUMENT")
+            if not reasons and self.mode is not Mode.SHADOW:
+                self._mode_gate(p, now)
+        except ModeDenied as e:
+            reasons = [f"MODE_GATE:{e}"]
+        except Exception as e:           # anything unexpected: refuse to remove protection
+            reasons = [f"PRECHECK_ERROR:{type(e).__name__}"]
+        return reasons
+
+    def _pending_flattens(self) -> dict:
+        return kv_get(self.conn, "pending_flatten", {})
+
+    def _set_pending_flatten(self, strategy_id, version, cid, on: bool):
+        d = self._pending_flattens()
+        k = f"{strategy_id}|{cid}"
+        if on:
+            d.setdefault(k, {"strategy_id": strategy_id, "version": version, "con_id": int(cid), "last": None})
+        else:
+            d.pop(k, None)
+        kv_set(self.conn, "pending_flatten", d)
+
+    def _retry_flatten_cancels(self):
+        """Re-send cancel requests for stops of a persisted pending flatten (e.g. the first request failed on a disconnect), but only
+        while the exit is still allowed, so a retry can never strip protection that cannot be replaced."""
+        for v in list(self._pending_flattens().values()):
+            sid, cid = v["strategy_id"], int(v["con_id"])
+            q = self.orders.positions(sid).get(cid, Decimal(0))
+            rows = self._flatten_cancelable(sid, cid)
+            if q == 0 or not rows:
+                continue
+            if self._exit_precheck(sid, v["version"], cid, q, rows):
+                continue
+            for row in rows:
+                self._request_cancel(self.orders.get(row["client_order_id"]), "flatten: retry cancel")
+
+    def _resume_pending_flattens(self, throttle: bool, only_strategy: str | None = None) -> dict:
+        """Send the exit for each persisted pending flatten whose stops are gone. Returns {con_id: SubmitResult} for attempts made."""
+        out: dict = {}
+        now = self.clock()
+        for k, v in list(self._pending_flattens().items()):
+            sid, cid = v["strategy_id"], int(v["con_id"])
+            if only_strategy is not None and sid != only_strategy:
+                continue
+            q = self.orders.positions(sid).get(cid, Decimal(0))
+            if q == 0:
+                self._set_pending_flatten(sid, v["version"], cid, False)
+                continue
+            if self._flatten_cancelable(sid, cid):
+                continue                      # still waiting for the stop cancel ack
+            live_exit = None if not throttle else self.conn.execute(
+                "SELECT 1 FROM orders o JOIN intents i ON i.intent_id=o.intent_id WHERE o.strategy_id=? AND o.con_id=? AND o.state IN "
+                "('SUBMITTING','ACKED','PARTIALLY_FILLED','CANCEL_PENDING','UNCERTAIN') AND i.signal_id LIKE 'flatten-%'", (sid, cid)).fetchone()
+            if live_exit:
+                self._set_pending_flatten(sid, v["version"], cid, False)       # an exit is already in place
+                continue
+            if throttle and v.get("last") and (now - datetime.fromisoformat(v["last"])).total_seconds() < 30:
+                continue
+            seq = int(kv_get(self.conn, "flatten_seq", 0)) + 1
+            kv_set(self.conn, "flatten_seq", seq)
+            d = self._pending_flattens()
+            d[k]["last"] = iso(now)
+            kv_set(self.conn, "pending_flatten", d)
+            r = self._propose(self._flatten_exit_proposal(sid, v["version"], cid, q, seq), True)
+            out[cid] = r
+            if r.status in ("SUBMITTED", "UNCERTAIN"):
+                self._set_pending_flatten(sid, v["version"], cid, False)
+            else:
+                self.incident("FLATTEN_EXIT_BLOCKED", "critical", {"strategy_id": sid, "con_id": cid, "reasons": list(r.reasons)})
+        return out
 
     def record_manual_adjustment(self, con_id: int, qty: Decimal, operator: str, note: str) -> None:
         """Operator-only: record a position change that happened outside this system as a synthetic execution (fills are the only position source)."""

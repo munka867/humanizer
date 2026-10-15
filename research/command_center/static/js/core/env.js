@@ -1,6 +1,7 @@
 // ctx.env: execution environment, display mode, broker state, per-workspace capability states. Everything is derived from real endpoints.
 // There is NO execution in this app: the environment is always "research only". The mode is a display label and never changes execution.
 import { WORKSPACES } from "./registry.js";
+import { ibkrStore } from "../market/ibkr.js"; // MARKET worker edit: reflect the read-only IBKR data connection
 
 export const MODES = [
   { id: "DEMO", selectable: true, desc: "Show seeded demo events (source='demo'), clearly labelled." },
@@ -40,8 +41,16 @@ export function createEnv({ api, events, freshness, prefs, audit, risk }) {
     if (!S.conn) freshness.set("quotes", "unknown", { detail: `Could not read /api/connections (${S.connError || "not loaded"})`, source: "IBKR connector daily bars" });
     else freshness.set("quotes", md.state, { asOf: md.last_bar ? String(md.last_bar).slice(0, 10) : null, source: md.source,
       detail: md.state === "unavailable" ? (md.reason || "No daily-bar files") : `Daily bars only, no streaming quotes. Retrieved ${md.last_retrieved_on || "?"}; source delay ${Array.isArray(md.delayed_seconds) ? "varies" : md.delayed_seconds ?? "?"} s.` });
-    const b = S.conn?.broker || BROKER_DEFAULT;
-    freshness.set("broker", b.state === "connected" ? "unknown" : "unavailable", { source: "Broker adapter", detail: b.reason || "not connected" });
+    const ib = ibkrStore({ api }).get(), age = (x) => (x ? (Date.now() - new Date(x).getTime()) / 1000 : Infinity);
+    if (ib && ib.state === "connected") {
+      const a = ib.feeds?.account?.as_of;
+      freshness.set("broker", age(a) < 90 ? "realtime" : "stale", { asOf: a || null, source: ib.fake ? "SIMULATED IBKR (test fixture)" : "IBKR TWS/Gateway (read-only)", detail: "Read-only account snapshot; execution: none" });
+      const qa = ib.feeds?.quotes?.as_of, dt = ib.feeds?.quotes?.data_type;
+      if (qa && age(qa) < 90 && dt) freshness.set("quotes", dt === 1 ? "realtime" : dt === 2 || dt === 4 ? "historical" : "delayed", { asOf: qa, source: ib.fake ? "SIMULATED IBKR (test fixture)" : "IBKR TWS/Gateway", detail: `Tick type ${dt} (1 live, 2 frozen, 3 delayed, 4 delayed frozen), labelled per tick` });
+    } else {
+      const b = S.conn?.broker || BROKER_DEFAULT;
+      freshness.set("broker", b.state === "connected" ? "unknown" : "unavailable", { source: "Broker adapter", detail: b.reason || "not connected" });
+    }
     syncAgents();
   }
   function syncAgents() {
@@ -75,7 +84,11 @@ export function createEnv({ api, events, freshness, prefs, audit, risk }) {
     execution: "none",
     environment: { id: "research", label: "RESEARCH ONLY", detail: "Execution: none — broker adapter not built" },
     readOnly: true,
-    get broker() { return S.conn?.broker || BROKER_DEFAULT; },
+    get broker() {
+      const ib = ibkrStore({ api }).get();
+      if (ib && ib.state === "connected") return { state: "connected", reason: "read-only market/account data from TWS/Gateway; execution: none", adapter: "ib_async (read-only)", execution: "none", setup_complete: false, data_only: true, fake: !!ib.fake };
+      return S.conn?.broker || BROKER_DEFAULT;
+    },
     get hasDemo() { return !!S.snap?.has_demo; },
     get connections() { return S.conn; },
     get approvalsPending() { return (S.snap?.approvals || []).filter(a => !a.resolution); },
@@ -94,7 +107,7 @@ export function createEnv({ api, events, freshness, prefs, audit, risk }) {
     refresh,
     on(fn) { subs.add(fn); return () => subs.delete(fn); },
     notify: emit,
-    start() { refresh(); clearInterval(timer); timer = setInterval(() => { syncAgents(); }, 1000); events.onState(() => syncAgents()); setInterval(refresh, 60000); events.on("approval.requested", () => refresh()); events.on("approval.resolved", () => refresh()); },
+    start() { ibkrStore({ api }).on(() => { syncFreshness(); emit(); }); refresh(); clearInterval(timer); timer = setInterval(() => { syncAgents(); }, 1000); events.onState(() => syncAgents()); setInterval(refresh, 60000); events.on("approval.requested", () => refresh()); events.on("approval.resolved", () => refresh()); },
     workspaces: WORKSPACES,
   };
   return env;

@@ -334,7 +334,7 @@ def api_quotes(h, m, q, body):
 
 
 def _mgr():
-    from .ibkr.manager import get_manager
+    from command_center.ibkr.manager import get_manager  # our own read-only adapter package
     return get_manager()
 
 
@@ -477,7 +477,7 @@ def _connected_portfolio():
         return None
     if not snap:
         return None
-    from .ibkr.manager import mask_account
+    from command_center.ibkr.manager import mask_account
     st = mgr.status()
     as_of, vals = snap["as_of"], snap["values"]
 
@@ -525,9 +525,9 @@ def _connected_portfolio():
               "strategy": None, "currency": f["currency"]} for f in snap["executions"]]
     hide = "Unknown, not none: TWS hides order and execution information from the API while 'Read-Only API' is ON (official docs)."
     return {
-        "broker": {"state": "connected", "reason": "read-only market/account data from TWS/Gateway; execution: none", "mode": "read-only", "fake": st["fake"], "port": st["port"], "live_port": st["live_port"], "account_masked": mask_account(snap["account"])},
+        "broker": {"state": "connected", "reason": "read-only market/account data from TWS/Gateway; execution: none", "mode": "read-only", "fake": st["fake"], "port": st["port"], "paper_only": True, "account_masked": mask_account(snap["account"])},
         "positions": positions, "working_orders": orders, "fills": fills, "unavailable_reason": None,
-        "empty_reason": {"positions": f"The broker reported no stock positions as of {as_of}." + (f" {hidden} non-stock position(s) hidden: this app is stocks only." if hidden else ""),
+        "empty_reason": {"positions": f"The broker reported no stock positions as of {as_of[:19].replace('T', ' ')} UTC." + (f" {hidden} non-stock position(s) hidden: this app is stocks only." if hidden else ""),
                          "working_orders": hide, "fills": hide},
         "metrics": {"equity": metric("NetLiquidation", "net liquidation"), "daily_pnl": daily, "buying_power": metric("BuyingPower", "buying power"), "exposure": exposure,
                     "risk_usage": {"value": None, "reason": "no approved risk policy, so there is no limit to measure usage against", "currency": None, "as_of": None}},

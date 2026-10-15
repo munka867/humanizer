@@ -2,6 +2,7 @@
 import { el } from "../core/dom.js";
 import { icon } from "../core/icons.js";
 import { useCss, errText, field, selectEl, textInput, kv, note, card, poller } from "../research/kit.js";
+import { mountIbkrPanel } from "../ibkr/panel.js"; // MARKET worker: read-only IBKR connection panel (isolated module)
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const SECRET_RE = /token|secret|passw|api[_-]?key|authorization|cookie/i;
@@ -15,10 +16,10 @@ export default {
     const root = el("div", { class: "rs" }); host.replaceChildren(root);
     root.append(el("div", { class: "rs-head" }, el("div", {}, el("h1", {}, "Data & Connections"),
       el("p", {}, "Local daily-bar coverage and quality, IBKR account-export import (stored raw, not normalised), and the honest state of every connection. Market data and account exports are kept apart."))));
-    const connSlot = el("div", {}), covSlot = el("div", {}), impSlot = el("div", {}), regSlot = el("div", {});
-    root.append(connSlot, covSlot, impSlot, regSlot);
+    const ibSlot = el("div", {}), connSlot = el("div", {}), covSlot = el("div", {}), impSlot = el("div", {}), regSlot = el("div", {});
+    root.append(ibSlot, connSlot, covSlot, impSlot, regSlot);
     const timers = [];
-    this._off = [() => timers.forEach((t) => t.stop())];
+    this._off = [() => timers.forEach((t) => t.stop()), mountIbkrPanel(ctx, ibSlot)];
 
     // ---------------------------------------------------------------- connections
     let lastCheck = null;

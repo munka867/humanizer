@@ -1,0 +1,5 @@
+# OPTIONAL: only needed for live/delayed data and history download from your own TWS / IB Gateway (command_center/ibkr).
+# The dashboard starts and works without it. Install with:  python -m pip install -r requirements-ibkr.txt
+# ib_async 2.1.0: BSD 2-Clause licence (LICENSE on GitHub), requires Python >= 3.10, PyPI classifiers list 3.10-3.14. Python 3.15 is UNVERIFIED.
+# Pulls in (transitively): aeventkit, nest_asyncio, numpy (see PyPI).
+ib_async==2.1.0

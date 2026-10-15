@@ -50,11 +50,16 @@ export function sma(bars, n) {
 /** Range presets in calendar days back from the last bar. */
 export const RANGES = [["1M", 30], ["3M", 91], ["6M", 182], ["1Y", 365], ["2Y", 730], ["ALL", null]];
 
+const LIVE_KIND = { live: ["ok", "Live", "signal"], delayed: ["warn", "Delayed", "clock"], frozen: ["info", "Frozen", "clock"], delayed_frozen: ["info", "Delayed frozen", "clock"] };
 export function quoteFreshness(q) {
   if (!q) return { kind: "neutral", label: "No quote", why: "No quote returned" };
+  const L = LIVE_KIND[q.freshness];
+  if (L) return { kind: L[0], label: L[1], icon: L[2], live: true, why: `${L[1]} tick from ${q.source || "IBKR"} (market data type ${q.market_data_type ?? "?"}); as of ${q.as_of || "unknown time"}${q.record_source === "fake" ? ". SIMULATED, not real data" : ""}` };
   if (q.stale) return { kind: "warn", label: "Stale", why: q.stale_reason || "older than the freshness limit", icon: "alert" };
   return { kind: "info", label: "Historical", why: `Latest daily bar ${q.as_of}; not a streaming quote`, icon: "clock" };
 }
+/** Short as-of text: a time for live ticks (ISO timestamps), the date for daily bars. */
+export function asOfShort(q) { const a = q?.as_of || ""; return a.includes("T") ? a.slice(11, 16) + "Z" : a; }
 
 export const DEFINITIONS = {
   equity: "Net liquidation value of the broker account: cash plus market value of positions, in account currency.",

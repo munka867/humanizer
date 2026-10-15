@@ -21,3 +21,6 @@
 - D14 2026-10-14 Data refresh kept as a separate snapshot (dataset B); frozen dataset A and its split are unchanged so the sealed test window is not shifted.
 - D15 2026-10-15 User asked for automatic live data from IBKR and for the broker/risk build. Decision: read-only data adapter via local TWS/Gateway (paper ports by default, order calls not exposed);
   execution core built against a SIMULATED broker only; approvals gated by an HMAC key agents do not hold. IBKR states a paper account requires an approved AND funded live account; the user's account is currently unfunded (all zeros).
+- D16 2026-10-15 User created a TWS paper account and asked to use ONLY it (all permissions on paper only) and to drop the TFSA. Decisions: (1) rules narrowed to the DU paper account; the Claude-session connector (linked to the other account) is no longer used;
+  (2) TFSA/FHSA notes removed from the repo; IBKR accounts cannot be closed from here and the user is warned that closing the underlying live account may remove the paper account; (3) no order has been placed and none can be until the approval chain exists;
+  (4) a paper broker adapter is built against a fake only; the first real paper connection is the user's.

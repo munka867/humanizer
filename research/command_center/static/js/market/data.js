@@ -10,12 +10,12 @@ export async function loadInstruments(ctx, q = "") {
 }
 
 /** Quotes for instruments -> {byKey: {key: quote}, errors: {key: msg}}; uses SYMBOL:EXCHANGE so duplicate tickers resolve. */
-export async function loadQuotes(ctx, items) {
+export async function loadQuotes(ctx, items, live = false) {
   const byKey = {}, errors = {};
   for (let i = 0; i < items.length; i += 20) {
     const chunk = items.slice(i, i + 20);
     try {
-      const r = await ctx.api.get(`/api/quotes?symbols=${encodeURIComponent(chunk.map((x) => `${x.symbol}:${x.exchange}`).join(","))}`);
+      const r = await ctx.api.get(`/api/quotes?symbols=${encodeURIComponent(chunk.map((x) => `${x.symbol}:${x.exchange}`).join(","))}${live ? "&live=1" : ""}`);
       for (const q of r.quotes || []) byKey[keyOf(q)] = q;
       for (const e of r.errors || []) { const it = chunk.find((x) => x.symbol === e.symbol && (!e.exchange || x.exchange === e.exchange)); if (it) errors[keyOf(it)] = e.error + (e.reason ? `: ${e.reason}` : ""); }
     } catch (e) { for (const it of chunk) errors[keyOf(it)] = e.message; }

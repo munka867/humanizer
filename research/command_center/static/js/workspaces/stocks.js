@@ -54,7 +54,7 @@ export default {
         selected = null; drawDetails();
       } else select(pickSelected(ctx, universe, params, S.rows()[0]?.key), false);
     } catch (e) { chartP.el.append(ui.empty("Instruments unavailable", e.message, { label: "Retry", kind: "default", onClick: () => ctx.nav("stocks") })); }
-    dispose.push(() => mgr?.destroy(), () => chartP.destroy());
+    dispose.push(() => mgr?.destroy(), () => chartP.destroy(), () => S.destroy?.());
   },
   unmount() { dispose.forEach((f) => { try { f(); } catch { /* ignore */ } }); dispose = []; },
 };

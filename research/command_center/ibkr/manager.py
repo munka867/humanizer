@@ -28,9 +28,10 @@ def now_iso():
 
 
 def mask_account(a: str | None) -> str | None:
+    """Keep the 2-letter prefix (DU = paper) and the last 2 characters; the rest is hidden."""
     if not a:
         return None
-    return a[0] + "*" * max(2, len(a) - 3) + a[-2:]
+    return a[:2] + "*" * max(3, len(a) - 4) + a[-2:]
 
 
 class IBKRManager:
@@ -98,11 +99,11 @@ class IBKRManager:
             return {
                 "state": self.state, "fake": self.fake, "source": self.source, "library": lib,
                 "kind": self.target.kind if self.target else None, "label": self.target.label if self.target else None,
-                "port": self.target.port if self.target else None, "host": self.target.host if self.target else None, "live_port": bool(self.target and self.target.live_port),
+                "port": self.target.port if self.target else None, "host": self.target.host if self.target else None, "live_port": False,
                 "readonly": True, "execution": "none", "market_data_type_requested": self.market_data_type, "last_error": self.last_error,
                 "attempts": self.attempts, "next_retry_at": self.next_retry_at, "server_time": self.server_time, "feeds": {k: dict(v) for k, v in self.feeds.items()},
                 "subscribed": len(c.subscribed()) if c and self.state == "connected" else 0, "account_masked": mask_account(self._account["account"]) if self._account else None,
-                "allowed_kinds": guard.allowed_kinds(self.env), "live_ports_enabled": guard.live_ports_enabled(self.env),
+                "allowed_kinds": guard.allowed_kinds(self.env), "live_ports": "always refused (no override)", "paper_only": True,
                 "banner": "SIMULATED IBKR (test fixture): not real market data, not a real account" if self.fake else None,
                 "notes": list(self._notes),
             }
@@ -160,6 +161,12 @@ class IBKRManager:
                 client.on_disconnect = lambda: self._loop.call_soon_threadsafe(dropped.set)
                 await client.connect(self.connect_timeout)
                 self.client = client
+                try:
+                    guard.check_paper_accounts(client.managed_accounts())      # BEFORE anything is read: only a DU (paper) login may be used
+                except guard.AccountIdentityError as ide:
+                    self._set_error(E.explain_exception(ide))
+                    self.want = False                                          # terminal: do not keep retrying a live login
+                    break
                 st = await client.server_time()
                 client.set_market_data_type(self.market_data_type)
                 with self._lock:
@@ -197,7 +204,7 @@ class IBKRManager:
             await self._sleeper(delay)
         with self._lock:
             if not self.want:
-                self.state = "disconnected"
+                self.state = "error" if (self.last_error and self.last_error.get("title", "").startswith("Not a paper account")) else "disconnected"
 
     def _on_ib_error(self, code, text, req_id):
         info = E.explain(code, text)
@@ -300,7 +307,7 @@ class IBKRManager:
             if any(j["status"] in ("queued", "running") for j in self.jobs):
                 raise RuntimeError("a history download is already running or queued; wait for it to finish (one at a time keeps within IBKR pacing)")
             job = {"id": uuid.uuid4().hex[:12], "status": "queued", "bar_size": bar_size, "span_days": span, "use_rth": use_rth, "session": "regular" if use_rth else "regular+extended",
-                   "symbols": [f"{i['symbol']}:{i.get('exchange')}" for i in items], "created": now_iso(), "started": None, "finished": None, "error": None, "source": self.source,
+                   "symbols": [f"{i['symbol']}:{i['exchange']}" if i.get("exchange") else i["symbol"] for i in items], "created": now_iso(), "started": None, "finished": None, "error": None, "source": self.source,
                    "progress": {"symbol_index": 0, "symbols_total": len(items), "chunks_done": 0, "chunks_total_estimate": None, "rows": 0, "message": "queued"}, "outputs": [], "dir": None}
             self.jobs.insert(0, job)
             del self.jobs[MAX_JOBS_KEPT:]

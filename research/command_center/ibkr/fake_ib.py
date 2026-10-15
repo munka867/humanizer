@@ -14,7 +14,7 @@ from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 NY = ZoneInfo("America/New_York")
-FAKE_ACCOUNT = "FAKE0001"
+FAKE_ACCOUNT = "DUFAKE001"   # DU = paper-account prefix, as the real adapter requires
 HEAD = dt.datetime(2018, 1, 2, tzinfo=dt.timezone.utc)   # fake "earliest data" so paging ends
 BAR_SECS = {"1 min": 60, "5 mins": 300, "15 mins": 900, "1 hour": 3600}
 
@@ -75,6 +75,7 @@ class FakeIB:
         self.fake_orders = []
         self.unqualifiable = set()
         self.order_surface_called = False
+        self.accounts = [FAKE_ACCOUNT]   # tests set e.g. ["U1234567"] to simulate a LIVE login (must be refused)
 
     # connection ---------------------------------------------------------------
     async def connectAsync(self, host, port, clientId=1, timeout=4, readonly=False, **kw):
@@ -99,7 +100,7 @@ class FakeIB:
         return self._connected
 
     def managedAccounts(self):
-        return [FAKE_ACCOUNT]
+        return list(self.accounts)
 
     async def reqCurrentTimeAsync(self):
         return dt.datetime.now(dt.timezone.utc)

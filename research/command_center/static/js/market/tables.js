@@ -4,6 +4,8 @@ import { fmt } from "../core/format.js";
 import { DEFINITIONS } from "./util.js";
 
 const NB = "unavailable: no broker adapter implemented";
+/** Time only when the value is from today (the full timestamp is in the tooltip), else date and time. */
+const asOfText = (iso) => { const t = fmt.time(iso, { seconds: false }); return t.slice(0, 10) === fmt.time(new Date(), { seconds: false }).slice(0, 10) ? t.slice(11) : t; };
 const m = (reason) => reason || NB;
 
 export const ORDER_STATUS = {
@@ -52,11 +54,12 @@ export function expandRow(row, td) {
   td.append(el("dl", { class: "kv mk-expand" }, Object.entries(row).filter(([, v]) => v == null || typeof v !== "object").map(([k, v]) => el("div", { class: "kv-row" }, el("dt", {}, k), el("dd", {}, v == null ? "—" : String(v))))));
 }
 
-export function makeTable(ctx, kind, rows, reason, { action, maxHeight, compact = true, exportable = true, columnMenu = true } = {}) {
+export function makeTable(ctx, kind, rows, reason, { action, maxHeight, compact = true, exportable = true, columnMenu = true, connected = false } = {}) {
   const spec = { positions: [positionColumns, "positions", "No positions"], orders: [orderColumns, "working-orders", "No working orders"], fills: [fillColumns, "fills", "No fills"] }[kind];
   const [colFn, id, title] = spec;
   return ctx.ui.table({ id: `portfolio.${id}`, ariaLabel: title, caption: title, columns: colFn(ctx), rows: rows || [], rowKey: (r, i) => r.id || r.order_id || r.exec_id || `${r.conid}:${r.exchange}:${i}`, compact, maxHeight, filter: false, exportable, columnMenu, exportName: id,
-    expand: expandRow, emptyTitle: `${title}: ${reason ? "unavailable" : "none"}`, emptyWhy: reason || NB, emptyAction: action });
+    expand: expandRow, emptyTitle: connected ? (/^Unknown/.test(reason || "") ? `${title.replace(/^No /, "").replace(/^./, (c) => c.toUpperCase())}: unknown` : `${title} reported`) : `${title}: ${reason ? "unavailable" : "none"}`,
+    emptyWhy: reason || NB, emptyAction: connected ? undefined : action });
 }
 
 /** Five summary metrics from /api/portfolio. value null => em dash + reason. One-line reason, definition tooltip, as-of. */
@@ -69,10 +72,11 @@ export function metricCards(ctx, pf) {
     const isPct = k === "exposure" || k === "risk_usage";
     const valueEl = val == null ? fmt.missing(mt.reason || NB) : el("span", { class: [k === "daily_pnl" ? fmt.dir(val) : ""] }, isPct ? fmt.pct(val, { sign: false }) : fmt.money(val, { currency: mt.currency || "USD", sign: k === "daily_pnl" }));
     const info = el("span", { class: "mk-info", tabindex: 0, role: "note", "aria-label": `${label}: ${DEFINITIONS[k]}` }, ctx.ui.icon("info", 13)); ctx.ui.tooltip(info, DEFINITIONS[k]);
-    const reason = val == null ? (k === "risk_usage" && !policy ? "No approved risk policy; broker not connected" : "Broker not connected") : null;
+    const conn = pf?.broker?.state === "connected";
+    const reason = val == null ? (conn ? mt.reason : k === "risk_usage" && !policy ? "No approved risk policy; broker not connected" : "Broker not connected") : null;
     return el("div", { class: "mk-metric", dataset: { metric: k, state: val == null ? "unavailable" : "ok" } },
-      el("div", { class: "mk-m-label" }, el("span", { class: "mk-m-name" }, label), info, el("span", { class: "spacer" }), el("span", { class: "mk-m-asof" }, `as of ${mt.as_of ? fmt.time(mt.as_of) : "—"}`)),
+      el("div", { class: "mk-m-label" }, el("span", { class: "mk-m-name" }, label), info, el("span", { class: "spacer" }), el("span", { class: "mk-m-asof", title: mt.as_of ? fmt.time(mt.as_of) : "" }, `as of ${mt.as_of ? asOfText(mt.as_of) : "—"}`)),
       el("div", { class: "mk-m-value num" }, valueEl),
-      el("div", { class: "mk-m-reason", title: [mt.reason, sub].filter(Boolean).join(" · ") }, reason || [mt.currency, sub].filter(Boolean).join(" · ")));
+      el("div", { class: "mk-m-reason", title: [mt.reason, sub].filter(Boolean).join(" · ") }, reason || [mt.currency, mt.unit, pf?.broker?.fake ? "SIMULATED" : null, sub].filter(Boolean).join(" · ")));
   });
 }

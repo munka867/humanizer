@@ -7,6 +7,7 @@ import { createChartPanel } from "../market/chartpanel.js";
 import { createWatchState, createCompactWatchlist } from "../market/watchlist.js";
 import { loadInstruments, loadPortfolio, loadSignals, pickSelected, saveSelected } from "../market/data.js";
 import { metricCards, makeTable } from "../market/tables.js";
+import { ibkrStore } from "../market/ibkr.js";
 
 let dispose = [];
 
@@ -24,7 +25,15 @@ export default {
     const metrics = el("div", { class: "mk-metrics", role: "group", "aria-label": "Account summary" });
     const top = el("div", { class: "mk-top" }, strip, metrics);
     const drawTop = () => {
-      const broker = pf?.broker;
+      const broker = pf?.broker, conn = broker?.state === "connected";
+      strip.classList.toggle("connected", !!conn);
+      if (conn) {
+        strip.replaceChildren(ui.badge(broker.fake ? "demo" : "ok", broker.fake ? "SIMULATED IBKR (test fixture)" : "Broker data connected (read-only)", broker.fake ? "flask" : "plug"),
+          el("span", { class: "muted mk-strip-text", title: pf.note }, `Account ${broker.account_masked || ""} as of ${fmt.time(pf.as_of)}. Read-only; execution: none.`), el("span", { class: "spacer" }), showWl, showSide,
+          ui.btn("IBKR connection", { onClick: () => ctx.nav("data") }));
+        metrics.replaceChildren(...metricCards(ctx, pf));
+        return;
+      }
       strip.replaceChildren(
         ui.badge("warn", broker ? "Research mode: no broker connected" : "Portfolio data unavailable", "plug_off"),
         el("span", { class: "muted mk-strip-text", title: "The connected IBKR account was read once on 2026-10-08 and was empty/new. This app has no live account feed, so no account figure is shown." }, pf ? "Account figures are unavailable, not zero. No live account feed." : "Could not load /api/portfolio."),
@@ -72,7 +81,12 @@ export default {
     drawEvents(); drawRisk(); drawFresh();
     let evT = null;
     dispose.push(ctx.events.on("*", () => { clearTimeout(evT); evT = setTimeout(() => { drawEvents(); scheduleAgents(); }, 250); }));
-    dispose.push(ctx.risk.on(drawRisk), ctx.freshness.on(drawFresh));
+    dispose.push(ctx.risk.on(drawRisk), ctx.freshness.on(drawFresh), () => S.destroy?.());
+    let lastKey = null, pfTimer = null;
+    const reloadPf = () => loadPortfolio(ctx).then((r) => { pf = r; drawTop(); drawTabs(); }).catch(() => {});
+    const offIbs = ibkrStore(ctx).on((st) => { const key = st ? `${st.state}|${st.fake}` : "none"; if (lastKey !== null && key !== lastKey) reloadPf(); lastKey = key; });
+    pfTimer = setInterval(() => { if (ibkrStore(ctx).connected()) reloadPf(); }, 15000);
+    dispose.push(offIbs, () => clearInterval(pfTimer));
 
     // ---- lower: tabs + agent summary
     const tabPanels = {}, sigRef = { v: undefined };
@@ -82,7 +96,7 @@ export default {
       const action = { label: "Connect broker", onClick: () => ctx.nav("data") };
       if (k === "signals") return sigRef.v === undefined ? p.replaceChildren(ui.skeleton({ lines: 2 })) : drawSignals(sigRef.v);
       const [kind, rows] = { positions: ["positions", pf?.positions], orders: ["orders", pf?.working_orders], fills: ["fills", pf?.fills] }[k];
-      p.replaceChildren(makeTable(ctx, kind, rows, why, { action, maxHeight: 112, exportable: false, columnMenu: false }).el);
+      p.replaceChildren(makeTable(ctx, kind, rows, pf?.broker?.state === "connected" ? pf.empty_reason?.[{ positions: "positions", orders: "working_orders", fills: "fills" }[kind]] : why, { action, maxHeight: 112, exportable: false, columnMenu: false, connected: pf?.broker?.state === "connected" }).el);
     };
     const lowerTabs = ui.tabs({ id: "cc.lower", label: "Portfolio and signals", tabs: ["positions:Positions", "orders:Working orders", "fills:Fills", "signals:Strategy signals"].map((x) => { const [id, label] = x.split(":"); return { id, label, render: (p) => { tabPanels[id] = p; paint(id); } }; }) });
     const drawTabs = () => Object.keys(tabPanels).forEach(paint);

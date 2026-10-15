@@ -3,7 +3,8 @@
 import { el, text } from "../core/dom.js";
 import { fmt } from "../core/format.js";
 import { loadBars, loadMarkers, loadQuotes } from "./data.js";
-import { loadChartLib, token, rgba, isoDate, sma, RANGES, kv, safeText, quoteFreshness } from "./util.js";
+import { loadChartLib, token, rgba, isoDate, sma, RANGES, kv, safeText, quoteFreshness, asOfShort } from "./util.js";
+import { ibkrStore } from "./ibkr.js";
 
 const INTERVALS = [["1D", "Daily"], ["1W", "Weekly"], ["1M", "Monthly"]];
 const OVERLAYS = [["sma20", 20, "SMA 20"], ["sma50", 50, "SMA 50"], ["sma200", 200, "SMA 200"]];
@@ -17,7 +18,8 @@ export function createChartPanel(ctx, { compact = false, extra = null, idPrefix 
   let L, chart, candles, volume, markerApi, sealedS, lines = {}, ro, mo, byTime = new Map(), cleanups = [];
 
   // ---------------------------------------------------------------- DOM
-  const title = el("h2", { class: "mk-ctitle" }), sub = el("span", { class: "mk-csub muted" });
+  const title = el("h2", { class: "mk-ctitle" }), sub = el("span", { class: "mk-csub muted" }), liveBox = el("span", { class: "mk-live", dataset: { testid: "live-price" }, hidden: true });
+  const ibs = ibkrStore(ctx);
   const intervalBox = el("div", { class: "mk-seg", role: "group", "aria-label": "Bar interval" });
   const rangeBox = el("div", { class: "mk-seg", role: "group", "aria-label": "Visible range" });
   const overlayBox = el("div", { class: "mk-seg", role: "group", "aria-label": "Chart-only overlays" });
@@ -29,7 +31,7 @@ export function createChartPanel(ctx, { compact = false, extra = null, idPrefix 
   const legend = el("div", { class: "mk-legend" });
   const mstrip = el("div", { class: "mk-mstrip", "aria-label": "Trade markers" });
   const root = el("section", { class: ["mk-chart", compact ? "compact" : ""], "aria-label": "Price chart" },
-    el("div", { class: "mk-ctop" }, el("div", { class: "mk-ctitlebox" }, title, sub), el("span", { class: "spacer" }), navBox, extra),
+    el("div", { class: "mk-ctop" }, el("div", { class: "mk-ctitlebox" }, title, sub, liveBox), el("span", { class: "spacer" }), navBox, extra),
     el("div", { class: "mk-ctools" }, intervalBox, rangeBox, overlayBox),
     chips,
     el("div", { class: "mk-cwrap" }, readout, canvas, overlayMsg),
@@ -112,7 +114,7 @@ export function createChartPanel(ctx, { compact = false, extra = null, idPrefix 
     overlayMsg.hidden = false; overlayMsg.replaceChildren(ui.skeleton({ variant: "block", height: 120 }));
     try {
       const [b, mk, qs] = await Promise.all([loadBars(ctx, ins, interval),
-        loadMarkers(ctx, ins).catch((e) => ({ markers: [], reason: `markers unavailable: ${e.message}` })), loadQuotes(ctx, [ins]).catch(() => ({ byKey: {} }))]);
+        loadMarkers(ctx, ins).catch((e) => ({ markers: [], reason: `markers unavailable: ${e.message}` })), loadQuotes(ctx, [ins], ibs.connected()).catch(() => ({ byKey: {} }))]);
       if (my !== seq || destroyed) return;
       meta = b.meta; limits = b.limits; bars = b.bars.map(norm); markers = mk.markers || []; markersReason = mk.reason || null; quote = qs.byKey?.[ins.key] || null;
       if (!bars.length) throw Object.assign(new Error("No bars returned for this instrument and interval."), { empty: true });
@@ -120,7 +122,7 @@ export function createChartPanel(ctx, { compact = false, extra = null, idPrefix 
       candles.setData(bars.map((x) => ({ time: x.t, open: x.open, high: x.high, low: x.low, close: x.close })));
       volume.setData(volData()); drawSealed();
       byTime = new Map(bars.map((x, i) => [x.t, i]));
-      drawControls(); drawOverlays(); drawMarkers(); drawChips(); applyRange(); showReadout(null);
+      drawControls(); drawOverlays(); drawMarkers(); drawChips(); drawLive(); applyRange(); showReadout(null);
       canvas.dataset.ready = "1"; canvas.dataset.bars = String(bars.length); canvas.dataset.interval = interval;
     } catch (e) {
       if (my !== seq || destroyed) return;
@@ -162,12 +164,24 @@ export function createChartPanel(ctx, { compact = false, extra = null, idPrefix 
     mstrip.replaceChildren(...tm.slice(0, 20).map((x) => el("button", { type: "button", class: "mk-mbtn", dataset: { markerId: x.id }, on: { click: () => openEvidence([x._m]) } },
       `${x._m.t ?? x.time} · ${STATE_META[x._m.state] ? STATE_META[x._m.state][1] : "Marker"} · ${x._m.side || ""}`)));
   }
+  function drawLive() {
+    const fr = quoteFreshness(quote);
+    if (!quote || !fr.live) { liveBox.hidden = true; return; }
+    liveBox.hidden = false;
+    liveBox.replaceChildren(el("b", { class: "num" }, fmt.price(quote.last)), el("span", { class: ["num", fmt.dir(quote.pct_change)] }, quote.pct_change == null ? "" : fmt.pct(quote.pct_change)), ctx.ui.badge(fr.kind, `${fr.label} ${asOfShort(quote)}`, fr.icon));
+    liveBox.title = fr.why;
+  }
+  async function pollQuote() {
+    if (!ins || destroyed || !ibs.connected() || !meta) return;
+    try { const r = await loadQuotes(ctx, [ins], true); quote = r.byKey?.[ins.key] || quote; drawLive(); drawChips(); } catch { /* keep last */ }
+  }
+  const qTimer = setInterval(pollQuote, 5000);
   function drawChips() {
-    const m = meta, asOf = quote?.as_of || meta.last_session || bars.at(-1)?.t, fr = quoteFreshness(quote);
+    const m = meta, fr = quoteFreshness(quote), asOf = fr.live ? asOfShort(quote) : (quote?.as_of || meta.last_session || bars.at(-1)?.t);
     const mk = (kind, label, why, ic) => { const c = ui.badge(kind, label, ic); if (why) c.title = why; return c; };
     const all = [
       mk("info", "IBKR connector (daily files)", `Source: ${m.source}. Retrieved ${m.retrieved_on}.`, "data"),
-      mk(fr.kind, `${fr.label}${asOf ? " · as of " + asOf : ""}`, fr.why, fr.icon),
+      mk(fr.kind, fr.live ? `Quote: ${fr.label} · ${asOf}` : `${fr.label}${asOf ? " · as of " + asOf : ""}`, fr.why, fr.icon),
       mk("neutral", `Feed ${m.feed}${m.delayed_seconds ? " " + Math.round(m.delayed_seconds / 60) + " min" : ""}`, "Connector data is delayed; these are completed daily bars, not a live feed.", "clock"),
       mk("neutral", "America/New_York", "Bar dates are New York session dates.", "clock"),
       mk(m.adjusted_for_dividends ? "ok" : "warn", m.adjusted_for_dividends ? "Dividend-adjusted" : "Unadjusted for dividends", "Prices are as traded; dividends/splits are not applied.", "info"),
@@ -239,5 +253,5 @@ export function createChartPanel(ctx, { compact = false, extra = null, idPrefix 
     drawControls(); await fetchBars();
   }
   drawControls();
-  return { el: root, setInstrument, refresh: fetchBars, chartHandle: () => canvas.__market, destroy() { destroyed = true; ro?.disconnect(); mo?.disconnect(); try { chart?.remove(); } catch { /* already removed */ } chart = null; cleanups.forEach((f) => f()); } };
+  return { el: root, setInstrument, refresh: fetchBars, chartHandle: () => canvas.__market, destroy() { destroyed = true; clearInterval(qTimer); ro?.disconnect(); mo?.disconnect(); try { chart?.remove(); } catch { /* already removed */ } chart = null; cleanups.forEach((f) => f()); } };
 }

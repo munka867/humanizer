@@ -13,13 +13,15 @@ Do not optimise for an impressive backtest.
   must be labelled `SYNTHETIC` in filename and metadata, and is used ONLY to test software.
 - YouTube channels (@deltatrendtrading, @TTrades_edu) are hypothesis sources. Transcripts are read via the
   Firecrawl youtube/read capability (no charts/visuals). Record exactly what was accessed in docs/SOURCES.md.
-- IBKR (user authorisation, updated 2026-10-15): the dashboard may take LIVE/delayed market data and READ-ONLY account data from the user's own
-  TWS / IB Gateway through command_center/ibkr (read-only wrapper). Default ports are PAPER (TWS 7497, Gateway 4002); live ports (7496, 4001) are
-  refused unless an explicit env var is set, and are still read-only. The data adapter must not expose order/cancel/modify calls (static + runtime tests).
-  The Claude-session IBKR connector remains read-only (never create_order_instruction, alerts or watchlist writes). Order logic lives only in
-  tradelab/execution against a SIMULATED broker. No real or paper order path is wired. Enabling PAPER requires ALL of: an approved strategy state, an approved
-  risk policy, the user's signed approval record (HMAC with a secret the agents do not hold), and a paper-account identity check. LIVE is NOT allowed.
-  Keep account data out of git and out of public docs (the repository is PUBLIC).
+- IBKR (user authorisation, updated 2026-10-15, narrowed later the same day): the ONLY IBKR account this project may use is the user's PAPER trading account
+  (TWS paper login; account ids start with "DU"). No other IBKR account (the user's live/TFSA account) may be read or traded: the Claude-session IBKR connector is
+  linked to that other account and is NO LONGER USED for anything. Data and orders go through the user's own TWS / IB Gateway on loopback, PAPER ports only
+  (TWS 7497, Gateway 4002); live ports (7496, 4001) are refused with no override. After connecting, every managed account id must start with "DU" or the adapter
+  disconnects and refuses. The dashboard's data adapter (command_center/ibkr) is read-only and exposes no order calls. Order logic lives only in tradelab/execution
+  (pure, simulated broker) and tradelab/brokers/ibkr_paper (the only code allowed to import ib_async for orders). Orders require ALL of: an approved_paper strategy
+  state, an approved risk policy, the user's HMAC-signed approval record (key the agents do not hold, created by the user running the approve CLI locally) bound to the
+  paper account id, and a paper-account identity check on every order. LIVE trading is NOT allowed and cannot be enabled by config. Keep account data out of git
+  (the repository is PUBLIC).
 - Only information available at the decision time may be used (no look-ahead). Conservative intrabar fills:
   if stop and target are both touched in one bar, assume the STOP filled first.
 - Chronological train / validation / final-test split. Purge so trades cannot straddle boundaries.

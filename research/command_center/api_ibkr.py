@@ -15,10 +15,10 @@ from __future__ import annotations
 import re
 
 from .router import route
-from .ibkr import manager as M
-from .ibkr.guard import GuardError
-from .ibkr.readonly_client import LibraryMissing
-from .ibkr import errors as E
+from command_center.ibkr import manager as M  # our own read-only adapter package (not a third-party broker library)
+from command_center.ibkr.guard import GuardError
+from command_center.ibkr.readonly_client import LibraryMissing
+from command_center.ibkr import errors as E
 from .schemas import ValidationError
 
 SYM_RE = re.compile(r"[A-Z][A-Z0-9.\-]{0,9}\Z")

@@ -5,6 +5,7 @@ import { fmt, DASH } from "./format.js";
 import { WORKSPACES, byId } from "./registry.js";
 import { nyseSession } from "./session.js";
 import { MODES } from "./env.js";
+import { ibkrStore, chipText } from "../market/ibkr.js"; // MARKET worker edit: read-only broker-data chip + simulated-IBKR banner
 
 const NAV_BREAK_ICONS = 1100, NAV_BREAK_DRAWER = 800;
 
@@ -188,12 +189,12 @@ export function createShell(ctx) {
     ui.popover(anchor, (box, p) => { box.classList.add("info-pop"); box.append(el("div", { class: "pop-title" }, title)); build(box, p); }, { label: title, width });
   }
   function brokerPanel(a) {
-    const b = env.broker;
-    panel("Broker connection", (box, p) => box.append(
-      ui.badge("warn", "Broker not connected", "plug_off"),
-      el("p", { class: "pop-note" }, el("strong", {}, "Trading setup incomplete. "), `${b.reason}.`),
-      el("dl", { class: "kv" }, row("Execution", "none — broker adapter not built"), row("Account data", "Read-only IBKR access is authorised but not wired into this app"), row("Risk engine", "not built")),
-      ui.btn("Set up in Data & Connections", { kind: "primary", icon: "data", onClick: () => { p.close(false); ctx.nav("data"); } })), a);
+    const b = env.broker, ib = ibkrStore(ctx).get(), c = chipText(ib);
+    panel("Broker data connection", (box, p) => box.append(
+      ui.badge(ib && ib.state === "connected" ? (ib.fake ? "demo" : "ok") : ib && ib.state === "error" ? "bad" : "warn", c.label, c.icon),
+      ib && ib.last_error ? el("p", { class: "pop-note" }, el("strong", {}, ib.last_error.title + ". "), ib.last_error.message, " ", ib.last_error.fix) : el("p", { class: "pop-note" }, ib && ib.state === "connected" ? "Read-only market and account data from your own TWS/Gateway. Not yet verified against a real account." : `${b.reason}. Connect TWS/Gateway in Data & Connections to get live or delayed data.`),
+      el("dl", { class: "kv" }, row("Execution", "none — no order path exists"), row("Market data", ib && ib.state === "connected" ? "live/delayed ticks, labelled per tick" : "daily files only (historical)"), row("Account data", ib && ib.state === "connected" ? "read-only snapshot" : "not connected"), row("Risk engine", "not built")),
+      ui.btn("Open IBKR connection", { kind: "primary", icon: "data", onClick: () => { p.close(false); ctx.nav("data"); } })), a);
   }
   function dataPanel(a) {
     const f = freshness.get("quotes"), md = env.connections?.market_data;
@@ -232,8 +233,8 @@ export function createShell(ctx) {
       list.append(b);
     }
     box.append(list, msg, el("p", { class: "pop-foot" }, icon("shield", 14), " Execution: none — broker adapter not built"));
-    const bk = env.broker.state !== "connected";
-    if (bk) box.append(el("div", { class: "pop-setup" }, el("span", {}, "Trading setup incomplete — broker not connected."), ui.btn("Set up", { onClick: () => { ui.closePopover(); ctx.nav("data"); } })));
+    const bk = env.broker.state !== "connected" || env.broker.data_only;
+    if (bk) box.append(el("div", { class: "pop-setup" }, el("span", {}, env.broker.data_only ? "Trading setup incomplete — broker DATA is connected read-only; no execution adapter exists." : "Trading setup incomplete — broker not connected."), ui.btn("Set up", { onClick: () => { ui.closePopover(); ctx.nav("data"); } })));
   }, { label: "Display mode", width: 360, placement: "bottom-end" }));
   function paintMode() {
     $("mode-value").textContent = env.mode;
@@ -244,7 +245,9 @@ export function createShell(ctx) {
   // ---------------------------------------------------------------- chips painting
   function paintChips() {
     const b = env.broker;
-    brokerChip.set({ label: "Broker not connected", icon: "plug_off", tone: "warn", aria: `Broker not connected. ${b.reason}. Trading setup incomplete. Open details.`, title: "Trading setup incomplete" });
+    const ib = ibkrStore(ctx).get();
+    if (ib) { const c = chipText(ib); brokerChip.set({ label: c.label, icon: c.icon, tone: c.tone, aria: `${c.label}. Execution: none. Open details.`, title: "Broker DATA connection (read-only). Execution: none." }); }
+    else brokerChip.set({ label: "Broker data: checking", icon: "plug_off", tone: "neutral", aria: "Broker data connection: checking. Execution: none.", title: "Execution: none" });
     const q = freshness.get("quotes"), qn = { realtime: "Realtime", delayed: "Delayed", historical: "Historical", stale: "Stale", unavailable: "Unavailable", unknown: "Unknown" }[q.state];
     dataChip.set({ label: `Data ${qn}`, sub: q.asOf ? (/^\d{4}/.test(q.asOf) && q.asOf.length === 10 ? q.asOf.slice(5) : fmt.time(q.asOf, { date: false, seconds: false })) : "", icon: q.state === "unavailable" ? "plug_off" : q.state === "stale" ? "alert" : "clock", tone: q.state === "historical" || q.state === "realtime" ? (q.state === "realtime" ? "ok" : "info") : q.state === "unknown" ? "neutral" : q.state === "unavailable" ? "bad" : "warn", aria: `Market data ${qn}${q.asOf ? ", as of " + q.asOf : ""}. ${q.detail || ""}`, title: q.detail });
     const e = events.state();
@@ -274,7 +277,10 @@ export function createShell(ctx) {
 
   // ---------------------------------------------------------------- banners (stale stream)
   const staleBanner = el("div", { class: "banner banner-stale", role: "alert", hidden: true });
-  banners.append(staleBanner);
+  const simBanner = el("div", { class: "banner banner-sim", role: "status", id: "sim-banner", hidden: true }, icon("flask", 16), el("strong", {}, "SIMULATED IBKR (test fixture)"), " — not real market data and not a real account. Records carry source=fake.");
+  banners.append(simBanner, staleBanner);
+  try { if (!document.getElementById("ib-css")) document.head.append(el("link", { rel: "stylesheet", href: "/static/css/ibkr.css", id: "ib-css" })); } catch { /* ignore */ }
+  ibkrStore(ctx).on((st) => { simBanner.hidden = !(st && st.fake); paintChips(); });
   function paintBanners() {
     const e = events.state(), stale = e.conn === "stale";
     staleBanner.hidden = !stale; outlet.classList.toggle("is-stale", stale); document.body.classList.toggle("stale", stale);

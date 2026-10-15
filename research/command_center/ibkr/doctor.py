@@ -1,6 +1,6 @@
 """IBKR doctor: step-by-step READ-ONLY checks with the exact fix for each failure. Makes no orders and never writes data.
 
-    python -m command_center.ibkr.doctor [--port 7497]     # 7497 paper TWS (default), 4002 paper Gateway; 7496/4001 only with CC_IBKR_ALLOW_LIVE_PORT_READONLY=1
+    python -m command_center.ibkr.doctor [--port 7497]     # 7497 paper TWS (default), 4002 paper Gateway. Live ports 7496/4001 are always refused.
     python -m command_center.ibkr.doctor --fake            # runs the same steps against the SIMULATED IB (test fixture), to prove the tool itself works
 
 Not yet run against a real TWS/Gateway by the author: the first real run is yours. Report any FAIL text you cannot resolve.
@@ -47,10 +47,8 @@ async def run_doctor(port: int | None = None, ib_factory=None, stock_factory=Non
         kind = guard.kind_for_port(port if port else 7497)
         target = guard.resolve_target(kind, client_id=DOCTOR_CLIENT_ID)
         ok("port allowed by the safety guard", f"{target.label}, clientId {target.client_id}, read-only")
-        if target.live_port:
-            out("      NOTE: this is a LIVE-account port. The doctor still only reads.")
     except guard.GuardError as e:
-        bad("port allowed by the safety guard", str(e), "use 7497 (TWS paper) or 4002 (Gateway paper)")
+        bad("port allowed by the safety guard", str(e), "use 7497 (TWS paper) or 4002 (Gateway paper); live ports are never allowed")
         return 1
     if not fake:
         s = socket.socket()
@@ -71,6 +69,12 @@ async def run_doctor(port: int | None = None, ib_factory=None, stock_factory=Non
         except Exception as e:  # noqa: BLE001
             d = E.explain_exception(e, target.port)
             bad("connect (read-only API client)", f"{d['title']}: {d['message']}", d["fix"])
+            return 1
+        try:
+            guard.check_paper_accounts(client.managed_accounts())
+            ok("paper account identity", f"all managed account ids start with DU ({', '.join(mask_account(a) for a in client.managed_accounts())})")
+        except guard.AccountIdentityError as e:
+            bad("paper account identity", str(e), "quit TWS/Gateway and log in with your PAPER username (ids start with DU); nothing else was read")
             return 1
         try:
             t = await client.server_time()

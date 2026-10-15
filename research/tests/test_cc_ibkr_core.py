@@ -575,3 +575,13 @@ def test_manager_history_error_is_reported_in_job(mgr):
 
 def test_mask_account():
     assert mask_account("U1234567") == "U*****67" and mask_account(None) is None and "1234" not in mask_account("DU1234567")
+
+
+def test_real_library_wrapper_constructs_and_maps_a_refused_connection():
+    """Only runs where ib_async is installed (optional dependency). Proves the REAL library path builds and maps ConnectionRefused; no TWS needed."""
+    pytest.importorskip("ib_async")
+    c = ReadOnlyClient(guard.resolve_target("paper_tws"))
+    with pytest.raises(Exception) as ei:
+        run(c.connect(1.5))
+    assert "listening" in E.explain_exception(ei.value, 7497)["message"] or "did not" in E.explain_exception(ei.value, 7497)["title"].lower()
+    assert not c.connected

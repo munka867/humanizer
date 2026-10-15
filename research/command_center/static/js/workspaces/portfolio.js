@@ -18,9 +18,12 @@ export default {
     const why = pf?.unavailable_reason || (err ? `Portfolio data failed to load: ${err}` : "unavailable: no broker adapter implemented");
     const action = { label: "Connect broker", onClick: () => ctx.nav("data") };
     const sect = (id, title, sub, body) => el("section", { class: "mk-panel mk-pf-sec", id: `pf-${id}`, "aria-labelledby": `pf-${id}-h` }, el("div", { class: "mk-panel-head" }, el("h3", { id: `pf-${id}-h` }, title), el("span", { class: "muted mk-fine" }, sub)), body);
-    const b = pf?.broker;
-    const head = el("div", { class: "mk-strip", "data-testid": "broker-strip" }, ui.badge("warn", b ? `Broker ${String(b.state).replace(/_/g, " ")}` : "Portfolio data unavailable", "plug_off"),
-      el("span", { class: "muted mk-strip-text", title: pf?.note || "" }, b ? `${b.reason.charAt(0).toUpperCase()}${b.reason.slice(1)}. Account figures are unavailable, not zero.` : "Could not load /api/portfolio."), el("span", { class: "spacer" }), ui.btn("Connect broker", { onClick: () => ctx.nav("data") }));
+    const b = pf?.broker, conn = b?.state === "connected";
+    const head = conn
+      ? el("div", { class: "mk-strip connected", "data-testid": "broker-strip" }, ui.badge(b.fake ? "demo" : "ok", b.fake ? "SIMULATED IBKR (test fixture)" : "Broker data connected (read-only)", b.fake ? "flask" : "plug"),
+        el("span", { class: "muted mk-strip-text", title: pf.note }, `Account ${b.account_masked || ""} as of ${ctx.fmt.time(pf.as_of)}. Read-only; execution: none. Zeros shown are what the broker reported.`), el("span", { class: "spacer" }), ui.btn("IBKR connection", { onClick: () => ctx.nav("data") }))
+      : el("div", { class: "mk-strip", "data-testid": "broker-strip" }, ui.badge("warn", b ? `Broker ${String(b.state).replace(/_/g, " ")}` : "Portfolio data unavailable", "plug_off"),
+        el("span", { class: "muted mk-strip-text", title: pf?.note || "" }, b ? `${b.reason.charAt(0).toUpperCase()}${b.reason.slice(1)}. Account figures are unavailable, not zero.` : "Could not load /api/portfolio."), el("span", { class: "spacer" }), ui.btn("Connect broker", { onClick: () => ctx.nav("data") }));
     const prereq = ["A broker adapter (paper first) that is implemented, reviewed and tested: none exists.", "An approved risk policy (max loss per day, max position, max order value, concentration): none is approved.",
       "A deterministic risk engine that enforces those limits in code, with a kill switch and tests: not built.", "Order-state reconciliation that never treats an acknowledgement as a fill: not built.", "Explicit approval to enable paper trading for the connected account (live trading is not permitted)."];
     const entry = el("section", { class: "mk-panel mk-entry", "aria-labelledby": "pf-entry-h" }, el("div", { class: "mk-panel-head" }, el("h3", { id: "pf-entry-h" }, "Order entry unavailable: no broker adapter, no approved risk policy")),
@@ -31,7 +34,8 @@ export default {
         el("li", {}, "FX: positions are shown in their own currency. No FX conversion is applied; a base-currency total will state the rate and its time."),
         el("li", {}, "Deposits and withdrawals are tracked separately from trading P&L. That tracking is not implemented yet."),
         el("li", {}, "Unknown values are an em dash with the reason, never zero.")));
-    const tbl = (k, rows) => makeTable(ctx, k, rows, pf ? why : why, { action, compact: true, maxHeight: 260 }).el;
+    const emptyKey = { positions: "positions", orders: "working_orders", fills: "fills" };
+    const tbl = (k, rows) => makeTable(ctx, k, rows, conn ? pf.empty_reason?.[emptyKey[k]] : why, { action, compact: true, maxHeight: 260, connected: conn }).el;
     host.replaceChildren(head, el("div", { class: "mk-metrics", role: "group", "aria-label": "Account summary" }, ...metricCards(ctx, pf)),
       el("div", { class: "mk-pf-grid" },
         el("div", { class: "mk-pf-main" },

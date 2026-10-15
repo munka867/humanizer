@@ -1,0 +1,19 @@
+/* ibkr.css (MARKET): IBKR connection panel in Data & Connections. Tokens only. */
+.ib-panel { display: grid; gap: var(--s3); padding: var(--s4); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); }
+.ib-head { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; } .ib-head h3 { font-size: 15px; }
+.ib-sim { display: flex; gap: var(--s2); align-items: flex-start; padding: var(--s3); border: 2px dashed var(--demo); border-radius: var(--r-md); background: var(--demo-bg); font-weight: 600; }
+.ib-sim .icon { color: var(--demo); margin-top: 2px; }
+.ib-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s4); }
+.ib-box { display: grid; gap: var(--s2); align-content: start; min-width: 0; padding: var(--s3); background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-md); }
+.ib-box h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--text-2); }
+.ib-steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: var(--fs-secondary); }
+.ib-err { display: grid; gap: 4px; padding: var(--s3); border: 1px solid var(--neg); border-left-width: 4px; border-radius: var(--r-sm); background: var(--bad-bg); font-size: var(--fs-secondary); }
+.ib-err b { font-size: var(--fs-body); } .ib-err .ib-fix { color: var(--text); } .ib-err details { color: var(--text-2); }
+.ib-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--s2); align-items: end; }
+.ib-form label { display: grid; gap: 4px; font-size: var(--fs-label); color: var(--text-2); } .ib-form .input { width: 100%; }
+.ib-prog { height: 8px; border-radius: 6px; background: var(--raised); border: 1px solid var(--border); overflow: hidden; } .ib-prog > i { display: block; height: 100%; background: var(--accent); }
+.ib-job { display: grid; gap: 6px; padding: var(--s3); background: var(--raised); border: 1px solid var(--border); border-radius: var(--r-sm); font-size: var(--fs-secondary); }
+.ib-out { font-family: var(--font-mono); font-size: 11.5px; overflow-wrap: anywhere; color: var(--text-2); }
+.ib-feeds { display: grid; grid-template-columns: auto 1fr; gap: 4px var(--s3); font-size: var(--fs-secondary); margin: 0; } .ib-feeds dt { color: var(--text-2); } .ib-feeds dd { margin: 0; }
+@media (max-width: 900px) { .ib-cols { grid-template-columns: minmax(0, 1fr); } }
+.banner-sim { background: var(--demo-bg); border-bottom: 2px dashed var(--demo); border-left: 4px solid var(--demo); font-size: var(--fs-body); } .banner-sim .icon { color: var(--demo); }

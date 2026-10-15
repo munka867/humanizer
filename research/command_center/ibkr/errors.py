@@ -67,6 +67,8 @@ def explain_exception(exc: BaseException, port: int | None = None) -> dict:
                 "basis": "general", "raw": text[:300]}
     if name == "LibraryMissing":
         return {"code": None, "severity": "error", "title": "ib_async is not installed", "message": text, "fix": "Run: python -m pip install ib_async==2.1.0  (then restart the dashboard).", "basis": "local", "raw": text[:300]}
+    if name == "AccountIdentityError":
+        return {"code": None, "severity": "error", "title": "Not a paper account: refused", "message": text, "fix": "Quit TWS/Gateway, log in with your PAPER trading username (account ids start with DU), then connect again.", "basis": "local safety rule (CLAUDE.md)", "raw": text[:300]}
     if name == "GuardError":
-        return {"code": None, "severity": "error", "title": "Connection refused by the safety guard", "message": text, "fix": "Use the paper port (TWS 7497 or Gateway 4002).", "basis": "local", "raw": text[:300]}
+        return {"code": None, "severity": "error", "title": "Connection refused by the safety guard", "message": text, "fix": "Use the paper port (TWS 7497 or Gateway 4002). Live ports are never allowed.", "basis": "local", "raw": text[:300]}
     return {"code": None, "severity": "error", "title": "Connection failed", "message": f"{name}: {text}"[:300], "fix": "Check that TWS/Gateway is running and logged in; see docs/IBKR_SETUP.md.", "basis": "general", "raw": text[:300]}

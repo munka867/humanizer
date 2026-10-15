@@ -8,8 +8,9 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "command_center" / "static"
 JS_FILES = sorted([*(STATIC / "js" / "market").glob("*.js"), *(STATIC / "js" / "workspaces").glob("*.js")])
-MINE = [STATIC / "js" / "workspaces" / f"{n}.js" for n in ("command_center", "stocks", "portfolio")] + sorted((STATIC / "js" / "market").glob("*.js"))
+MINE = [STATIC / "js" / "workspaces" / f"{n}.js" for n in ("command_center", "stocks", "portfolio")] + sorted((STATIC / "js" / "market").glob("*.js")) + sorted((STATIC / "js" / "ibkr").glob("*.js"))
 CSS = STATIC / "css" / "market.css"
+CSS_IB = STATIC / "css" / "ibkr.css"
 
 
 def src(p):
@@ -28,7 +29,7 @@ def test_no_html_injection_apis(p):
         assert not re.search(bad, s), f"{p.name}: forbidden pattern {bad}"
 
 
-@pytest.mark.parametrize("p", MINE + [CSS], ids=lambda p: p.name)
+@pytest.mark.parametrize("p", MINE + [CSS, CSS_IB], ids=lambda p: p.name)
 def test_no_external_urls(p):
     s = src(p)
     assert not re.search(r"https?://|//cdn\.|@import\s+url\(\s*['\"]?https?", s), f"{p.name} references an external URL"
@@ -40,12 +41,13 @@ def test_no_order_paths(p):
     for bad in ("/api/order", "/api/trade", "place_order", "placeorder", "submitorder", "submit_order", "create_order", "cancelorder", "cancel_order", "modifyorder", "ib_insync", "ibapi", "create_order_instruction", "/api/execute"):
         assert bad not in s, f"{p.name} mentions {bad}"
     posts = re.findall(r"api\.post\(\s*([^,]+),", src(p))
-    for target in posts:  # the only writes this module family performs are watchlist edits
-        assert "/api/watchlists" in target or "watchlists" in target or target.strip().startswith("items("), f"{p.name}: unexpected POST target {target}"
+    for target in posts:  # the only writes: watchlist edits and the read-only IBKR connect/disconnect/history controls
+        assert "watchlists" in target or target.strip().startswith("items(") or re.fullmatch(r'"/api/ibkr/(connect|disconnect|history|history/stop)"', target.strip()), f"{p.name}: unexpected POST target {target}"
 
 
-def test_css_uses_tokens_only():
-    s = strip_comments(src(CSS))
+@pytest.mark.parametrize("css", [CSS, CSS_IB], ids=lambda p: p.name)
+def test_css_uses_tokens_only(css):
+    s = strip_comments(src(css))
     assert not re.search(r"#[0-9a-fA-F]{3,8}\b", s), "hex colour literal in market.css (use tokens.css variables)"
     assert not re.search(r"\brgba?\(|\bhsla?\(", s), "raw colour function in market.css"
 

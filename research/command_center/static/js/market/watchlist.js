@@ -3,7 +3,8 @@
 import { el } from "../core/dom.js";
 import { fmt } from "../core/format.js";
 import { loadInstruments, loadQuotes, loadWatchlists } from "./data.js";
-import { keyOf, quoteFreshness } from "./util.js";
+import { keyOf, quoteFreshness, asOfShort } from "./util.js";
+import { ibkrStore } from "./ibkr.js";
 
 export function createWatchState(ctx) {
   const S = { lists: [], available: [], universe: new Map(), activeId: null, quotes: {}, errors: {}, loaded: false, error: null, subs: new Set() };
@@ -13,12 +14,19 @@ export function createWatchState(ctx) {
   S.rows = () => (S.active()?.items || []).map((it) => { const k = keyOf(it), u = S.universe.get(k) || {}; return { key: k, symbol: it.symbol, conid: it.conid, exchange: it.exchange, currency: u.currency || null, currencyBasis: u.currencyBasis, name: u.name || null, quote: S.quotes[k] || null, qerr: S.errors[k] || null, ...(u.key ? { data: u.data } : {}) }; });
   S.setActive = (id) => { S.activeId = id; try { ctx.prefs.set("market.activeList", id); } catch { /* keep in memory */ } emit(); S.refreshQuotes(); };
   S.apply = (resp) => { S.lists = resp.watchlists || resp.lists || S.lists; if (resp.available_instruments) S.available = resp.available_instruments; if (!S.lists.some((l) => l.id === S.activeId)) S.activeId = S.lists[0]?.id || null; emit(); S.refreshQuotes(); };
+  const ib = ibkrStore(ctx);
+  S.live = () => ib.connected();
   S.refreshQuotes = async () => {
     const items = S.rows(); if (!items.length) { emit(); return; }
-    const need = items.filter((r) => !S.quotes[r.key] && !S.errors[r.key]);
-    if (need.length) { const r = await loadQuotes(ctx, need); Object.assign(S.quotes, r.byKey); Object.assign(S.errors, r.errors); }
+    const live = S.live();
+    const need = live ? items : items.filter((r) => !S.quotes[r.key] && !S.errors[r.key]);   // live: refresh every poll; otherwise daily closes are fetched once
+    if (need.length) { const r = await loadQuotes(ctx, need, live); Object.assign(S.quotes, r.byKey); Object.assign(S.errors, r.errors); for (const k of Object.keys(r.byKey)) delete S.errors[k]; }
     emit();
   };
+  let wasLive = false, tick = null;
+  const offIb = ib.on(() => { const l = ib.connected(); if (l !== wasLive) { wasLive = l; if (!l) { S.quotes = {}; S.errors = {}; } S.refreshQuotes(); } });
+  tick = setInterval(() => { if (S.live()) S.refreshQuotes(); }, 5000);
+  S.destroy = () => { clearInterval(tick); offIb(); };
   S.load = async () => {
     try {
       const [w, u] = await Promise.all([loadWatchlists(ctx), loadInstruments(ctx)]);
@@ -54,16 +62,16 @@ export function createCompactWatchlist(ctx, S, { onSelect, getSelected, onManage
     else body.replaceChildren(...rows.map((r) => {
       const fr = quoteFreshness(r.quote);
       const b = el("button", { type: "button", role: "option", class: "mk-wl-row", "aria-selected": String(r.key === cur), dataset: { key: r.key, symbol: r.symbol },
-        title: `${r.symbol} · ${r.exchange} · conId ${r.conid}. ${r.quote ? `Last ${fmt.price(r.quote.last)} (daily close ${r.quote.as_of}); ${fr.why}` : r.qerr || "no quote"}`,
+        title: `${r.symbol} · ${r.exchange} · conId ${r.conid}. ${r.quote ? `Last ${fmt.price(r.quote.last)} (${fr.label}, as of ${r.quote.as_of}); ${fr.why}` : r.qerr || "no quote"}`,
         on: { click: () => onSelect(S.universe.get(r.key) || { ...r, key: r.key }) } },
         el("span", { class: "mk-wl-sym" }, el("b", {}, r.symbol), el("span", { class: "muted mk-wl-ex" }, r.exchange)),
         el("span", { class: "mk-wl-last num" }, r.quote ? fmt.price(r.quote.last) : fmt.missing(r.qerr || "No quote")),
         el("span", { class: ["mk-wl-chg", "num", fmt.dir(r.quote?.pct_change)] }, r.quote ? fmt.pct(r.quote.pct_change) : "—"),
-        el("span", { class: ["mk-dot", r.quote?.stale ? "stale" : "hist"], "aria-label": fr.label }));
+        el("span", { class: ["mk-dot", r.quote?.stale ? "stale" : fr.live ? "live" : "hist"], "aria-label": fr.label, title: fr.label }));
       return b;
     }));
-    const any = rows.find((r) => r.quote);
-    foot.replaceChildren(any ? `Daily closes, as of ${any.quote.as_of}. ${any.quote.stale ? "STALE: " + any.quote.stale_reason : "Historical, not streaming."}` : "No quotes available.", el("br"), "Instruments with data available, not recommendations.");
+    const any = rows.find((r) => r.quote), lv = any && quoteFreshness(any.quote).live;
+    foot.replaceChildren(any ? (lv ? `${quoteFreshness(any.quote).label} ticks from IBKR (read-only), as of ${asOfShort(any.quote)}. Each row is labelled.${any.quote.record_source === "fake" ? " SIMULATED data." : ""}` : `Daily closes, as of ${any.quote.as_of}. ${any.quote.stale ? "STALE: " + any.quote.stale_reason : "Historical, not streaming."}`) : "No quotes available.", el("br"), "Instruments with data available, not recommendations.");
   }
   const off = S.on(draw); draw();
   return { el: root, destroy: off };
@@ -144,7 +152,7 @@ export function createWatchManager(ctx, S, { onSelect, getSelected }) {
     { key: "chg", label: "Change", width: 82, align: "num", sortable: false, render: (r) => chgCell(r, "chg") },
     { key: "pct", label: "% chg", width: 82, align: "num", sortable: false, render: (r) => chgCell(r, "pct") },
     { key: "vol", label: "Volume", width: 92, align: "num", sortable: false, render: (r) => (r.quote ? fmt.cell(r.quote.volume, "compact") : fmt.missing(r.qerr || "No quote")) },
-    { key: "fresh", label: "Quote", width: 172, sortable: false, render: (r) => { if (!r.quote) return ui.badge("neutral", "No quote", "dash"); const f = quoteFreshness(r.quote); const b = ui.badge(f.kind, `${f.label} ${r.quote.as_of}`, f.icon); b.title = f.why; return b; } },
+    { key: "fresh", label: "Quote", width: 172, sortable: false, render: (r) => { if (!r.quote) return ui.badge("neutral", "No quote", "dash"); const f = quoteFreshness(r.quote); const b = ui.badge(f.kind, `${f.label} ${asOfShort(r.quote)}`, f.icon); b.title = f.why; return b; } },
     { key: "act", label: "Actions", width: 120, sortable: false, hideable: false, render: (r) => { const n = S.active().items.length, i = S.active().items.findIndex((x) => keyOf(x) === r.key), dis = !canDrag();
         const mk = (lab, aria, fn, d) => { const b = el("button", { type: "button", class: "icon-btn mk-mv", "aria-label": `${aria} ${r.symbol} ${r.exchange}`, title: dis && aria !== "Remove" ? "Needs manual order and no filter" : aria, disabled: d }, lab); b.addEventListener("click", (e) => { e.stopPropagation(); fn(); }); return b; };
         return el("span", { class: "mk-acts" }, mk("↑", "Move up", () => move(r.key, -1), dis || i <= 0), mk("↓", "Move down", () => move(r.key, 1), dis || i >= n - 1), mk("✕", "Remove", () => remove(r))); } },

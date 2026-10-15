@@ -31,7 +31,7 @@ def has_post(path: str) -> bool:
 def load_modules():
     """Import optional feature modules; each registers routes at import time."""
     import importlib
-    for name in ("api_core", "api_market", "api_research", "api_data"):
+    for name in ("api_core", "api_market", "api_ibkr", "api_research", "api_data"):
         try:
             importlib.import_module(f"command_center.{name}")
         except ModuleNotFoundError as e:

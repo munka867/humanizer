@@ -300,16 +300,68 @@ def api_quotes(h, m, q, body):
         if len(parts) > 20:
             raise ApiError(400, "at most 20 symbols")
         today = _now().astimezone(NY).date()
-        quotes, errors = [], []
+        quotes, errors, resolved = [], [], []
         for p in parts:
             sym, _, ex = p.partition(":")
             try:
-                quotes.append(quote_for(resolve(sym, ex or None), today))
+                resolved.append(resolve(sym, ex or None))
             except ApiError as e:
                 errors.append({"symbol": sym.upper(), "exchange": ex.upper() or None, "error": e.msg, **e.extra})
-        return h._json(200, {"quotes": quotes, "errors": errors, "server_date_ny": today.isoformat(),
-                             "note": "Historical daily closes only; no streaming quotes. Extended-hours change: " + UNAVAILABLE})
+        live = _live_ticks(resolved) if q.get("live") in ("1", "true") else None
+        for ins in resolved:
+            try:
+                tick = (live or {}).get("ticks", {}).get((ins["symbol"], ins["exchange"], ins["conid"]))
+                hq = None
+                try:
+                    hq = quote_for(ins, today)
+                except ApiError:
+                    if tick is None:
+                        raise
+                if tick is not None:
+                    quotes.append(_live_quote(ins, tick, hq, live["fake"]))
+                else:
+                    if live is not None:
+                        hq["live_unavailable_reason"] = live["reason"]
+                    quotes.append(hq)
+            except ApiError as e:
+                errors.append({"symbol": ins["symbol"], "exchange": ins["exchange"], "error": e.msg, **e.extra})
+        out = {"quotes": quotes, "errors": errors, "server_date_ny": today.isoformat(),
+               "note": ("Live/delayed ticks from IBKR TWS/Gateway where available (each labelled); otherwise historical daily closes. " if live else "Historical daily closes only; no streaming quotes. ") + "Extended-hours change: " + UNAVAILABLE}
+        if live is not None:
+            out["live"] = {"requested": True, "connected": live["connected"], "fake": live["fake"], "reason": live["reason"]}
+        return h._json(200, out)
     return _guard(h, go)
+
+
+def _mgr():
+    from .ibkr.manager import get_manager
+    return get_manager()
+
+
+def _live_ticks(instruments: list[dict]) -> dict:
+    """Ask the IBKR manager (if connected) for ticks. Never raises; returns {ticks, connected, fake, reason}."""
+    try:
+        m = _mgr()
+        st = m.status()
+        if st["state"] != "connected":
+            return {"ticks": {}, "connected": False, "fake": st["fake"], "reason": f"not connected to TWS/Gateway (state: {st['state']})"}
+        ticks = m.live_quotes([{"symbol": i["symbol"], "exchange": i["exchange"], "conid": i["conid"], "currency": "USD"} for i in instruments])
+        return {"ticks": ticks, "connected": True, "fake": st["fake"], "reason": "no tick received yet for this instrument (no market-data permission or market closed)"}
+    except Exception as e:  # noqa: BLE001
+        return {"ticks": {}, "connected": False, "fake": False, "reason": f"live feed error: {type(e).__name__}"}
+
+
+def _live_quote(ins, tick, hist, fake: bool) -> dict:
+    last, prev = tick.last if tick.last is not None else tick.bid, tick.prior_close
+    if prev is None and hist:
+        prev = hist["last"]  # latest completed daily close
+    chg = round(last - prev, 6) if (last is not None and prev) else None
+    label = tick.data_type_label
+    return {"symbol": ins["symbol"], "conid": ins["conid"], "exchange": ins["exchange"], "currency": "USD", "last": last, "bid": tick.bid, "ask": tick.ask, "prev_close": prev,
+            "change": chg, "pct_change": round(chg / prev * 100, 6) if (chg is not None and prev) else None, "volume": tick.volume, "as_of": tick.time, "prev_close_date": hist["as_of"] if hist else None,
+            "freshness": label, "stale": False, "market_data_type": tick.data_type, "session": "as reported by broker tick (regular and/or extended)", "delayed_seconds": 900 if tick.data_type in (3, 4) else 0,
+            "source": "SIMULATED IBKR (test fixture)" if fake else "IBKR TWS/Gateway (read-only)", "record_source": "fake" if fake else "ibkr", "last_is": f"last trade tick ({label})",
+            "extended_hours": "not distinguished: depends on the tick the broker sent"}
 
 
 # ------------------------------------------------------------------ watchlists
@@ -410,8 +462,84 @@ def _metric(name):
     return {"value": None, "reason": f"unavailable: no broker adapter implemented; {name} is unknown, not zero", "currency": None, "as_of": None}
 
 
+_IB_STATUS = {"submitted": "working", "presubmitted": "acknowledged", "pendingsubmit": "acknowledged", "apipending": "acknowledged", "pendingcancel": "pending_cancel",
+              "cancelled": "cancelled", "apicancelled": "cancelled", "filled": "filled", "inactive": "uncertain"}
+
+
+def _connected_portfolio():
+    """Read-only account data from the IBKR manager, or None when not connected. Zeros the broker reported are zeros WITH as_of; unknown is null."""
+    try:
+        mgr = _mgr()
+        if mgr.status()["state"] != "connected":
+            return None
+        snap = mgr.account_snapshot()
+    except Exception:
+        return None
+    if not snap:
+        return None
+    from .ibkr.manager import mask_account
+    st = mgr.status()
+    as_of, vals = snap["as_of"], snap["values"]
+
+    def val(tag):
+        v = vals.get(tag)
+        try:
+            return (float(v[0]), v[1]) if v else (None, None)
+        except (TypeError, ValueError):
+            return (None, None)
+
+    def metric(tag, label):
+        v, cur = val(tag)
+        if v is None:
+            return {"value": None, "reason": f"{label} not reported by the broker", "currency": None, "as_of": None}
+        return {"value": v, "reason": None, "currency": cur, "as_of": as_of}
+    nl, ncur = val("NetLiquidation")
+    gross, _ = val("GrossPositionValue")
+    exposure = ({"value": round(gross / nl * 100, 4), "reason": None, "currency": None, "as_of": as_of, "unit": "percent of net liquidation"} if (nl and gross is not None)
+                else {"value": None, "reason": "net liquidation is zero or unknown, so the exposure ratio is undefined", "currency": None, "as_of": None})
+    d = snap["pnl"].get("daily")
+    daily = ({"value": d, "reason": None, "currency": ncur, "as_of": as_of} if d is not None else {"value": None, "reason": "TWS has not reported daily P&L yet (needs a P&L subscription to return data)", "currency": None, "as_of": None})
+    positions, hidden = [], 0
+    for p in snap["positions"]:
+        if p.get("secType") != "STK":
+            hidden += 1
+            continue
+        tick = None
+        try:
+            tick = mgr.client.quote(p["conid"]) if mgr.client else None
+        except Exception:
+            tick = None
+        mark = tick.last if tick and tick.last is not None else None
+        mv = round(mark * p["position"], 2) if mark is not None else None
+        positions.append({"id": f"{p['conid']}", "symbol": p["symbol"], "exchange": p["exchange"], "conid": p["conid"], "shares": p["position"], "avg_cost": p["avg_cost"], "mark": mark,
+                          "market_value": mv, "unrealized": round((mark - p["avg_cost"]) * p["position"], 2) if mark is not None else None, "realized": None, "daily_pnl": None,
+                          "weight": round(mv / nl * 100, 4) if (mv is not None and nl) else None, "ownership": None, "currency": p["currency"], "mark_type": tick.data_type_label if tick else None})
+    orders = []
+    for o in snap["open_orders"]:
+        s = _IB_STATUS.get(str(o["status"]).lower(), "uncertain")
+        if s == "working" and o["filled"] > 0:
+            s = "partial"
+        orders.append({"id": f"{o['perm_id'] or o['order_id']}", "symbol": o["symbol"], "side": str(o["side"]).lower(), "qty": o["qty"], "filled": o["filled"], "remaining": o["remaining"], "type": o["type"],
+                       "limit": o["limit"], "stop": o["stop"], "tif": o["tif"], "outside_rth": o["outside_rth"], "status": s, "strategy": None, "broker_id": o["perm_id"] or o["order_id"], "client_id": None})
+    fills = [{"id": f["exec_id"], "time": f["time"], "symbol": f["symbol"], "side": f["side"], "qty": f["qty"], "price": f["price"], "commission": f["commission"], "order_id": f["order_id"], "exec_id": f["exec_id"],
+              "strategy": None, "currency": f["currency"]} for f in snap["executions"]]
+    hide = "Unknown, not none: TWS hides order and execution information from the API while 'Read-Only API' is ON (official docs)."
+    return {
+        "broker": {"state": "connected", "reason": "read-only market/account data from TWS/Gateway; execution: none", "mode": "read-only", "fake": st["fake"], "port": st["port"], "live_port": st["live_port"], "account_masked": mask_account(snap["account"])},
+        "positions": positions, "working_orders": orders, "fills": fills, "unavailable_reason": None,
+        "empty_reason": {"positions": f"The broker reported no stock positions as of {as_of}." + (f" {hidden} non-stock position(s) hidden: this app is stocks only." if hidden else ""),
+                         "working_orders": hide, "fills": hide},
+        "metrics": {"equity": metric("NetLiquidation", "net liquidation"), "daily_pnl": daily, "buying_power": metric("BuyingPower", "buying power"), "exposure": exposure,
+                    "risk_usage": {"value": None, "reason": "no approved risk policy, so there is no limit to measure usage against", "currency": None, "as_of": None}},
+        "as_of": as_of, "source": "SIMULATED IBKR (test fixture)" if st["fake"] else "IBKR TWS/Gateway (read-only)",
+        "note": ("SIMULATED account data (test fixture), not a real account. " if st["fake"] else "") + "Read-only account data from your own TWS/Gateway as of the time shown; zeros are what the broker reported. No order can be placed from this app."}
+
+
 @route("GET", r"/api/portfolio")
 def api_portfolio(h, m, q, body):
+    cp = _connected_portfolio()
+    if cp is not None:
+        return h._json(200, cp)
     why = "unavailable: no broker adapter implemented"
     return h._json(200, {
         "broker": {"state": "not_connected", "reason": "no broker adapter implemented", "mode": "none"},

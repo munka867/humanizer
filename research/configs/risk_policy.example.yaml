@@ -1,0 +1,24 @@
+# EXAMPLE risk policy (schema risk_policy.v1). Numbers are placeholders for tests/docs, NOT recommendations.
+# Limits change only by loading a NEW policy file; the file's sha256 is bound into any approval record.
+schema: risk_policy.v1
+version: "example-1"
+timezone: America/New_York          # trading date for the daily-loss limit is the date in this zone
+limits:
+  max_risk_per_trade: 50            # account currency, qty * |entry - planned stop| * multiplier
+  max_daily_loss: 100
+  max_drawdown: 200                 # from peak equity
+  max_gross_exposure: 20000
+  max_net_exposure: 20000
+  max_correlated_exposure: 15000    # sum of |notional| of instruments with |rho| >= correlation_threshold (incl. itself)
+  correlation_threshold: 0.7
+  max_orders_per_minute: 5
+  max_orders_per_day: 50
+  max_spread_bps: 10
+  max_slippage_bps: 10
+  max_data_age_seconds: 30
+  min_account_headroom: 0.25        # available funds / equity
+  allow_short: false
+  require_margin_check: true
+instruments:                        # allowed by IB conId; ids below are FAKE
+  - {con_id: 1001, symbol: SPY, multiplier: 1, max_position_qty: 50, allow_short: false, sessions: [["09:35", "15:55"]]}
+  - {con_id: 1002, symbol: QQQ, multiplier: 1, max_position_qty: 50, allow_short: false, sessions: [["09:35", "15:55"]]}

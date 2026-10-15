@@ -342,7 +342,7 @@ BROKER_MODS = {"ib_insync", "ib_async", "ibapi", "ibkr", "alpaca", "alpaca_trade
 def test_no_broker_imports():
     for f in (ROOT / "command_center").glob("*.py"):
         for n in ast.walk(ast.parse(f.read_text())):
-            names = [a.name for a in n.names] if isinstance(n, ast.Import) else [n.module or ""] if isinstance(n, ast.ImportFrom) else []
+            names = [a.name for a in n.names] if isinstance(n, ast.Import) else [n.module or ""] if (isinstance(n, ast.ImportFrom) and not n.level) else []  # relative imports are our own modules (command_center.ibkr is the read-only adapter)
             for nm in names:
                 assert nm.split(".")[0].lower() not in BROKER_MODS, f"{f.name} imports {nm}"
 

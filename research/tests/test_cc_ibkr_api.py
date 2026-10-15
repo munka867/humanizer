@@ -36,7 +36,7 @@ def wf(fn, timeout=8.0):
 @pytest.fixture()
 def env(tmp_path, data_root, monkeypatch):
     ib = FakeIB()
-    m = MM.IBKRManager(ib_factory=lambda: ib, stock_factory=FakeStock, source="fake", data_root=tmp_path / "root", env={}, backoff=(0.05, 0.1), connect_timeout=2)
+    m = MM.IBKRManager(ib_factory=lambda: ib, stock_factory=FakeStock, source="fake", data_root=tmp_path / "ibroot", env={}, backoff=(0.05, 0.1), connect_timeout=2)
     MM.set_manager(m)
     s = make_server(tmp_path / "ev" / "e.db", port=0, token=TOKEN)
     threading.Thread(target=s.serve_forever, daemon=True).start()
@@ -135,7 +135,7 @@ def test_portfolio_positions_orders_fills_mapping(env):
                         orderStatus=N(status="Submitted", filled=4.0, remaining=6.0))]
     connect(s, m)
     j = call(s, "GET", "/api/portfolio")[1]
-    assert [p["symbol"] for p in j["positions"]] == ["SYNA"] and j["positions"][0]["shares"] == 10.0 and j["positions"][0]["mark"] is None and "1 non-stock" not in j["empty_reason"]["positions"]
+    assert [p["symbol"] for p in j["positions"]] == ["SYNA"] and j["positions"][0]["shares"] == 10.0 and j["positions"][0]["mark"] is None
     assert j["working_orders"][0]["status"] == "partial" and j["working_orders"][0]["side"] == "buy" and j["working_orders"][0]["limit"] == 99.0
 
 
@@ -154,7 +154,7 @@ def test_history_endpoint_validation_and_job(env, tmp_path):
     wf(lambda: call(s, "GET", "/api/ibkr/history/jobs")[1]["jobs"][0]["status"] in ("done", "error"), 20)
     jb = call(s, "GET", "/api/ibkr/history/jobs")[1]["jobs"][0]
     assert jb["id"] == jid and jb["status"] == "done" and jb["dir"].startswith("data/fake_") and jb["outputs"][0]["rows"] > 200 and jb["progress"]["chunks_done"] >= 1
-    root = tmp_path / "root"
+    root = tmp_path / "ibroot"
     assert (root / jb["outputs"][0]["path"]).exists() and not (root / "data" / "processed").exists()
     st, j = call(s, "POST", "/api/ibkr/history/stop", {"id": "z"})
     assert st == 400

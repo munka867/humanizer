@@ -4,7 +4,7 @@ from __future__ import annotations
 
 PAPER_PORTS = (7497, 4002)          # TWS paper, IB Gateway paper
 LOOPBACK_HOSTS = ("127.0.0.1", "::1")
-CLIENT_ID = 21                       # data adapter uses 11-19
+CLIENT_ID = 21                       # the dashboard data adapter uses 9100-9109 (command_center/ibkr/guard.py)
 PAPER_PREFIX = "DU"
 
 
@@ -18,7 +18,7 @@ def check_target(host: str, port: int, client_id: int) -> tuple[str, int, int]:
     if isinstance(port, bool) or not isinstance(port, int) or port not in PAPER_PORTS:
         raise GuardError(f"Refused: port {port!r} is not a PAPER port. Allowed: 7497 (TWS paper), 4002 (Gateway paper). Live ports are never allowed.")
     if client_id != CLIENT_ID:
-        raise GuardError(f"Refused: clientId must be exactly {CLIENT_ID} (the data adapter uses 11-19).")
+        raise GuardError(f"Refused: clientId must be exactly {CLIENT_ID} (the data adapter uses 9100-9109).")
     return host, port, client_id
 
 

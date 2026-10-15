@@ -47,7 +47,7 @@ def make(tmp_path, mode=Mode.DEMO, broker=None, name="led.db", clock=None, quote
     broker.set_time(clock())
     px = {"v": quote_px}
     svc = ExecutionService(str(tmp_path / name), mode, broker, RiskEngine.from_file(POLICY),
-                           lambda cid: good_quote(clock(), px["v"]), clock, margin_hook=(lambda p: margin), **kw)
+                           lambda cid: good_quote(clock(), px["v"]), clock, margin_hook=(lambda p: margin), lock_dir=str(tmp_path / "locks"), **kw)
     svc.px = px
     return svc, broker, clock
 

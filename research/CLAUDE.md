@@ -20,7 +20,7 @@ Do not optimise for an impressive backtest.
   disconnects and refuses. The dashboard's data adapter (command_center/ibkr) is read-only and exposes no order calls. Order logic lives only in tradelab/execution
   (pure, simulated broker) and tradelab/brokers/ibkr_paper (the only code allowed to import ib_async for orders). Orders require ALL of: an approved_paper strategy
   state, an approved risk policy, the user's HMAC-signed approval record (key the agents do not hold, created by the user running the approve CLI locally) bound to the
-  paper account id, and a paper-account identity check on every order. LIVE trading is NOT allowed and cannot be enabled by config. Keep account data out of git
+  paper account id, and a paper-account identity check on every order. LIVE trading is NOT allowed and cannot be enabled by config. KNOWN LIMIT (audit P6-01, accepted): the order permit cannot be made unforgeable against code running inside the same Python process; the real protection is that the execution service runs as a separate OS process on the user's own computer, with the approval key only in that process, TWS Read-Only API left ON except during a user-run paper test, and no assistant running code on that machine. Keep account data out of git
   (the repository is PUBLIC).
 - Only information available at the decision time may be used (no look-ahead). Conservative intrabar fills:
   if stop and target are both touched in one bar, assume the STOP filled first.

@@ -37,6 +37,7 @@ class Harness:
                                                           issued_utc=T0 - timedelta(hours=1), expires_utc=T0 + timedelta(hours=expires_in))))
         self.policy = policy
         self.env = dict(ENV)
+        self.env["TRADELAB_LOCK_DIR"] = str(tmp_path / "locks")
         self.mod = type("M", (), {"IB": staticmethod(lambda: self.fake), "Stock": MODULE.Stock, "Order": MODULE.Order})
         self.prompts = []
 
@@ -64,7 +65,7 @@ def test_happy_path_places_exactly_one_buy_and_the_offsetting_sell(tmp_path):
     (c1, o1), (c2, o2) = h.fake.placed
     assert (c1.conId, o1.action, o1.orderType, o1.totalQuantity, o1.lmtPrice, o1.tif, o1.outsideRth, o1.account) == (756733, "BUY", "LMT", 1.0, 100.04, "DAY", False, ACCT)
     assert (o2.action, o2.orderType, o2.totalQuantity, o2.lmtPrice, o2.account) == ("SELL", "LMT", 1.0, 99.96, ACCT)
-    assert len(o1.orderRef) == 32 and o1.orderRef != o2.orderRef
+    assert o1.orderRef.startswith("v1:") and len(o1.orderRef) == 52 and o1.orderRef != o2.orderRef
     t = h.text
     assert "ALL STEPS PASSED" in t and "[FAIL]" not in t and "AUDIT TRAIL" in t and "commission=0.35" in t
     assert "I PLACE A PAPER ORDER" in h.prompts[0] and KEY.decode() not in t

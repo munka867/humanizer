@@ -88,7 +88,6 @@ def test_docs_do_not_claim_real_broker_verification():
         assert not re.search(r"(verified|tested|confirmed) (against|with|on) (a )?(real|live) (tws|broker|gateway|account)", t, re.I), n
 
 
-@pytest.mark.xfail(strict=True, reason="P6-09 (doc inconsistency): the paper adapter's comment and EXECUTION_DESIGN say the data adapter uses clientIds 11-19, but command_center/ibkr/guard.py uses 9100-9109")
 def test_documented_client_id_ranges_match_the_code():
     guard_py = (ROOT / "src/tradelab/brokers/ibkr_paper/guard.py").read_text() + (ROOT / "docs/EXECUTION_DESIGN.md").read_text()
     code = (ROOT / "command_center/ibkr/guard.py").read_text()

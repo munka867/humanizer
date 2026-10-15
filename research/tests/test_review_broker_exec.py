@@ -37,7 +37,6 @@ def exit_order(sid, qty, side=-1):
 
 
 # ============================================================ 1. risk engine: the reducing-order exemption
-@pytest.mark.xfail(strict=True, reason="P6-02: 'reducing' is judged against FILLED position only; two SELL 10 against a +10 position are both 'reducing' and both go out -> net -10 SHORT although the policy forbids shorting")
 def test_two_reducing_exits_cannot_flip_the_position_to_short(tmp_path):
     svc, b, _ = long_position(tmp_path, 10)
     r1, r2 = svc.propose(exit_order("x1", 10)), svc.propose(exit_order("x2", 10))        # no fill processed in between (e.g. closed market, slow fill)
@@ -46,7 +45,6 @@ def test_two_reducing_exits_cannot_flip_the_position_to_short(tmp_path):
     assert b.positions().get(SPY, Dc(0)) >= 0, f"broker is now {b.positions()} after {r1.status}/{r2.status}"
 
 
-@pytest.mark.xfail(strict=True, reason="P6-02: reducing orders skip the order-frequency limit AND ignore working exits, so a runaway exit signal floods the broker (here 20 orders, policy says 5/minute) and ends short")
 def test_reducing_order_flood_is_rate_limited_and_cannot_exceed_the_position(tmp_path):
     svc, b, _ = long_position(tmp_path, 10)
     sent = [svc.propose(exit_order(f"f{i}", 1)).status for i in range(20)]
@@ -55,7 +53,6 @@ def test_reducing_order_flood_is_rate_limited_and_cannot_exceed_the_position(tmp
     assert sent.count("SUBMITTED") <= 5 and b.positions().get(SPY, Dc(0)) >= 0
 
 
-@pytest.mark.xfail(strict=True, reason="P6-02: flatten_strategy_positions called twice before the first fill (operator double-click / retry) sends two full closes -> short")
 def test_double_flatten_does_not_flip(tmp_path):
     svc, b, _ = long_position(tmp_path, 10)
     svc.flatten_strategy_positions("stratA", "v1")
@@ -65,7 +62,6 @@ def test_double_flatten_does_not_flip(tmp_path):
     assert b.positions().get(SPY, Dc(0)) >= 0
 
 
-@pytest.mark.xfail(strict=True, reason="P6-03: a SELL is still 'reducing' (and unchecked) while reconciliation has just reported POSITION_MISMATCH on that very instrument; at the broker it opens a short")
 def test_reducing_exemption_not_used_when_ledger_and_broker_disagree(tmp_path):
     svc, b, _ = long_position(tmp_path, 10)
     b.inject_foreign_position(SPY, -10)                       # broker is flat; ledger still believes +10
@@ -198,7 +194,6 @@ def test_no_order_without_key_state_policy_hash_account_or_expiry(tmp_path):
     svc.start(); assert svc.propose(entry()).status == "BLOCKED" and fake.order_calls == 0
 
 
-@pytest.mark.xfail(strict=True, reason="P6-04: the approval binds a risk-policy SHA, but ExecutionService never checks that the RiskEngine it enforces was loaded from those bytes; a looser engine + the path of the approved file passes the gate")
 def test_risk_engine_policy_must_be_the_approved_policy(tmp_path):
     strict = tmp_path / "strict.yaml"; loose = tmp_path / "loose.yaml"
     txt = POLICY.read_text()
@@ -215,7 +210,6 @@ def test_risk_engine_policy_must_be_the_approved_policy(tmp_path):
     assert r.status != "SUBMITTED", "20 shares were sent although the APPROVED policy caps SPY at 5"
 
 
-@pytest.mark.xfail(strict=True, reason="P6-05: ExecutionService(':memory:') is accepted in PAPER mode: no writer lock and no persistence, so a restart forgets every intent/order (duplicate sends) and two processes can trade the same account")
 def test_paper_mode_requires_a_persistent_locked_ledger():
     fake = FakeIB()
     mod = type("M", (), {"IB": staticmethod(lambda f=fake: f), "Stock": MODULE.Stock, "Order": MODULE.Order})
@@ -232,7 +226,6 @@ def test_single_writer_lock_blocks_second_service_on_same_ledger(tmp_path):
         make(tmp_path)
 
 
-@pytest.mark.xfail(strict=True, reason="P6-06: a non-ASCII hmac string makes hmac.compare_digest raise TypeError, which is not ModeDenied: propose() crashes instead of returning BLOCKED (fail-closed, but not handled)")
 def test_corrupt_approval_mac_is_a_clean_block(tmp_path):
     svc, adapter, fake, clock, port = make_paper(tmp_path)
     rec = json.loads(svc._approval_path.read_text()); rec["hmac_sha256"] = "é" * 64; svc._approval_path.write_text(json.dumps(rec))
@@ -319,7 +312,6 @@ def fill_event(adapter, order_ref, exec_id, shares=1, perm=1):
     adapter._on_exec(trade, SimpleNamespace(execution=ex, contract=SimpleNamespace(conId=SPY), time=T0))
 
 
-@pytest.mark.xfail(strict=True, reason="P6-07 (assumes IBKR's documented convention that a correction re-sends the execution with the same id stem and a higher final revision number): the adapter keys on the full execId, so a corrected execution is booked as a SECOND fill")
 def test_execution_correction_is_not_double_counted(tmp_path):
     svc, adapter, fake, clock, port = paper(tmp_path)
     ref = "a" * 32
@@ -329,7 +321,6 @@ def test_execution_correction_is_not_double_counted(tmp_path):
     assert len(fills) == 1
 
 
-@pytest.mark.xfail(strict=True, reason="P6-08: the client order id uses only the first 20 hex chars of orderRef; a foreign order whose orderRef shares that prefix is mapped to OUR order (its fills would be booked on our ledger)")
 def test_foreign_orderref_with_same_prefix_is_foreign():
     ours = "0123456789abcdef0123" + "0" * 12
     spoof = "0123456789abcdef0123" + "f" * 12
@@ -345,7 +336,6 @@ def test_foreign_open_order_blocks_entries_and_is_never_cancelled(tmp_path):
     assert fake.cancel_calls == [] and fake.order_calls == 0
 
 
-@pytest.mark.xfail(strict=True, reason="P6-02 end-to-end: with the FULL PAPER chain (key, approved_paper, approved policy, signed approval, permits, DU checks) all passing, two stacked 'reducing' exits turn a +10 position into -10 at the (fake) broker")
 def test_paper_chain_end_to_end_stacked_exits_flip_short(tmp_path):
     svc, adapter, fake, clock, port = make_paper(tmp_path)
     svc.start()
@@ -363,7 +353,6 @@ def test_paper_chain_end_to_end_stacked_exits_flip_short(tmp_path):
 
 
 # ============================================================ 5. further bypasses of the risk engine / approval content
-@pytest.mark.xfail(strict=True, reason="P6-10: the per-trade-risk rule (stop required, risk <= max_risk_per_trade) is applied only when purpose == 'entry'; a flat-to-long BUY labelled purpose='exit' or 'protective' opens 40 shares with no stop and no risk check")
 def test_purpose_label_cannot_skip_the_per_trade_risk_check(tmp_path):
     svc, b, _ = make(tmp_path)
     svc.start()
@@ -373,7 +362,6 @@ def test_purpose_label_cannot_skip_the_per_trade_risk_check(tmp_path):
         assert r.status == "BLOCKED", f"opened a long with purpose={purpose!r}: {r.status}"
 
 
-@pytest.mark.xfail(strict=True, reason="P6-11: 'capital_allocation' is signed into the approval but nothing ever reads it; an approval for $500 still lets $1,000 of stock go out (only the separate policy limits apply)")
 def test_signed_capital_allocation_is_enforced(tmp_path):
     from tradelab.execution.modes import make_approval
     svc, adapter, fake, clock, port = make_paper(tmp_path)
@@ -385,7 +373,6 @@ def test_signed_capital_allocation_is_enforced(tmp_path):
     assert r.status != "SUBMITTED"
 
 
-@pytest.mark.xfail(strict=True, reason="P6-12: approval expiry, permit TTL and data staleness all use the caller-supplied clock; nothing cross-checks it with the broker's own time (adapter.server_time() exists but is unused), so a wrong or wound-back clock revives an expired approval")
 def test_expired_approval_cannot_be_revived_by_a_wrong_local_clock(tmp_path):
     svc, adapter, fake, clock, port = make_paper(tmp_path)           # approval valid until T0 + 8h
     svc.start()
@@ -394,7 +381,6 @@ def test_expired_approval_cannot_be_revived_by_a_wrong_local_clock(tmp_path):
     assert r.status != "SUBMITTED"
 
 
-@pytest.mark.xfail(strict=True, reason="P6-13: the approve CLI will sign an approval bound to a non-paper account id (U...) and for an arbitrary validity (here 100 years); the adapter refuses the account later, but the signed record should never exist")
 def test_approve_cli_refuses_non_paper_accounts_and_unbounded_validity(tmp_path, monkeypatch, capsys):
     from tradelab.execution import approve
     monkeypatch.setenv("CC_APPROVAL_KEY", "throwaway-test-key")
@@ -422,7 +408,6 @@ def test_smoke_registry_and_caps_are_narrow():
     assert S.MAX_QTY == Dc(1) and S.SPY_CON_ID == 756733
 
 
-@pytest.mark.xfail(strict=True, reason="P6-05b: the single-writer lock is keyed on the LEDGER FILE, not on the broker account; two services with different ledgers can drive the same account at once, each blind to the other's orders/positions")
 def test_two_services_cannot_drive_the_same_broker_account(tmp_path):
     b = SimulatedBroker()
     make(tmp_path, name="one.db", broker=b)

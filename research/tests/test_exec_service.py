@@ -19,11 +19,11 @@ def protective(svc, qty=10, stop="95", sid="p1", side=-1):
     return svc.propose(Proposal("stratA", "v1", sid, SPY, "SPY", side, Dc(qty), "STP", stop_px=Dc(stop), purpose="protective"))
 
 
-def long_with_stop(svc, b):
+def long_with_stop(svc, b, stop_qty=10):
     svc.start()
     svc.propose(entry())
     fill_all(svc, b)
-    r = protective(svc)
+    r = protective(svc, qty=stop_qty)
     svc.process_events()
     assert svc.positions() == {SPY: Dc(10)} and r.status == "SUBMITTED"
     return r
@@ -57,7 +57,7 @@ def test_startup_reconciliation_runs_first_and_entries_wait_for_it(tmp_path):
 
 def test_unknown_broker_state_blocks_entries_but_keeps_protective_orders(tmp_path):
     svc1, b, clock = make(tmp_path)
-    long_with_stop(svc1, b)
+    long_with_stop(svc1, b, stop_qty=4)
     svc1.close()
     b.inject_foreign_order(QQQ, -1, 5)
     b.inject_foreign_position(QQQ, 5)
@@ -70,8 +70,10 @@ def test_unknown_broker_state_blocks_entries_but_keeps_protective_orders(tmp_pat
     assert blocked.status == "BLOCKED" and "RECONCILIATION_NOT_CLEAN" in blocked.reasons
     # our protective stop is still working at the broker (reconciliation never cancels), and a reducing exit is still allowed
     assert any(o.order_type == "STP" and o.con_id == SPY for o in b.open_orders())
-    ex = svc2.propose(Proposal("stratA", "v1", "x1", SPY, "SPY", -1, Dc(10), "MKT", purpose="exit"))
+    ex = svc2.propose(Proposal("stratA", "v1", "x1", SPY, "SPY", -1, Dc(6), "MKT", purpose="exit"))      # 10 held - 4 already covered by the stop
     assert ex.status == "SUBMITTED"
+    too_big = svc2.propose(Proposal("stratA", "v1", "x2", SPY, "SPY", -1, Dc(4), "MKT", purpose="exit"))
+    assert too_big.status == "BLOCKED"                                                                   # no reducing capacity left: would flip with the stop
 
 
 def test_unknown_execution_at_broker_blocks_entries(tmp_path):
@@ -95,18 +97,18 @@ def test_manual_adjustment_then_reconcile_clears_block(tmp_path):
 
 def test_pause_new_entries_keeps_protective_exits(tmp_path):
     svc, b, _ = make(tmp_path)
-    long_with_stop(svc, b)
+    long_with_stop(svc, b, stop_qty=4)
     svc.pause_new_entries("operator test")
     assert any(o.order_type == "STP" for o in b.open_orders())                   # not cancelled
     blocked = svc.propose(entry(signal_id="e2"))
     assert blocked.status == "BLOCKED" and "PAUSED_NEW_ENTRIES" in blocked.reasons
     # a new protective/reducing order is still allowed while paused
-    r = protective(svc, qty=5, stop="94", sid="p2")
+    r = protective(svc, qty=3, stop="94", sid="p2")
     assert r.status == "SUBMITTED"
-    exit_ = svc.propose(Proposal("stratA", "v1", "x", SPY, "SPY", -1, Dc(5), "MKT", purpose="exit"))
+    exit_ = svc.propose(Proposal("stratA", "v1", "x", SPY, "SPY", -1, Dc(3), "MKT", purpose="exit"))
     assert exit_.status == "SUBMITTED"
     fill_all(svc, b)
-    assert svc.positions() == {SPY: Dc(5)}
+    assert svc.positions() == {SPY: Dc(7)}
 
 
 def test_cancel_entry_orders_only_touches_strategy_owned_entry_orders(tmp_path):
@@ -150,7 +152,7 @@ def test_flatten_reports_residual_exposure_on_failure(tmp_path):
     rep2 = svc.flatten_strategy_positions("stratA")
     assert not rep2["complete"] and rep2["instruments"][SPY]["result"] == "UNCERTAIN"
     rep3 = svc.flatten_strategy_positions("stratA")                               # uncertain order on the same instrument: no blind double-close
-    assert rep3["instruments"][SPY]["result"] == "BLOCKED" and "UNCERTAIN_ORDER_SAME_INSTRUMENT" in rep3["instruments"][SPY]["reasons"]
+    assert rep3["instruments"][SPY]["result"] == "BLOCKED" and "NOT_REDUCING" in " ".join(rep3["instruments"][SPY]["reasons"])
 
 
 def test_flatten_with_delayed_fill_reports_pending_not_success(tmp_path):

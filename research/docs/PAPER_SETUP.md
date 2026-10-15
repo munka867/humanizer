@@ -63,6 +63,10 @@ Replace `DUxxxxxxx` with YOUR paper account id from the TWS title bar (starts wi
 SMOKE_TEST version 1, the exact smoke risk policy file (any edit to it invalidates the approval) and an expiry 4 hours from now.
 Do NOT commit or share `configs/approvals/paper_approval.json` (it contains your account id; the repository is public).
 
+Notes: the approve command refuses non-paper (non-`DU`) accounts and validity above 24 hours. `--capital` is enforced as a HARD CAP on gross exposure (the smaller of it and the
+policy cap), so it must be at least the price of one SPY share (use 1000 or more). The execution service also takes a per-account lock file in your home folder
+(`.tradelab_locks`), so a second run for the same account at the same time is refused.
+
 ## 6. Run the smoke test (during regular US market hours: 09:35-15:55 New York time)
 ```
 python -m tradelab.brokers.ibkr_paper.smoke_test

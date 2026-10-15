@@ -69,9 +69,13 @@ def verify_approval(path: Path, key: bytes, *, now_utc: datetime) -> dict:
         payload, mac = rec["payload"], rec["hmac_sha256"]
     except Exception as e:  # malformed
         raise ModeDenied(f"PAPER refused: approval record unreadable: {e}") from e
-    if set(payload) != set(APPROVAL_FIELDS):
+    if not isinstance(payload, dict) or set(payload) != set(APPROVAL_FIELDS):
         raise ModeDenied("PAPER refused: approval record has unexpected or missing fields")
-    if not hmac.compare_digest(sign_payload(key, payload), str(mac)):
+    try:
+        mac_ok = hmac.compare_digest(sign_payload(key, payload).encode(), str(mac).encode("utf-8", "replace"))
+    except Exception:
+        mac_ok = False
+    if not mac_ok:
         raise ModeDenied("PAPER refused: approval HMAC does not verify (tampered or wrong key)")
     issued, expires = parse_iso(payload["issued_utc"]), parse_iso(payload["expires_utc"])
     if now_utc < issued:
@@ -84,7 +88,8 @@ def verify_approval(path: Path, key: bytes, *, now_utc: datetime) -> dict:
 def assert_may_submit(mode: Mode, *, broker_is_simulated: bool, registry_state: Callable[[str, str], str | None] | None = None,
                       strategy_id: str | None = None, strategy_version: str | None = None, instruments: Iterable[int] = (),
                       risk_policy_path: Path | None = None, approval_path: Path | None = None,
-                      broker_account_id: str | None = None, now_utc: datetime | None = None, env=None) -> dict | None:
+                      broker_account_id: str | None = None, now_utc: datetime | None = None, env=None,
+                      engine_policy_sha256: str | None = None) -> dict | None:
     """Return normally iff an order MAY be sent to the broker port in this mode; otherwise raise ModeDenied.
     Returns the verified approval payload for PAPER, None otherwise."""
     env = os.environ if env is None else env
@@ -112,6 +117,8 @@ def assert_may_submit(mode: Mode, *, broker_is_simulated: bool, registry_state: 
     p = verify_approval(Path(approval_path), key, now_utc=now_utc)
     if sha256_hex(Path(risk_policy_path).read_bytes()) != p["risk_policy_sha256"]:
         raise ModeDenied("PAPER refused: risk policy sha256 differs from the approved one")
+    if engine_policy_sha256 is not None and engine_policy_sha256 != p["risk_policy_sha256"]:
+        raise ModeDenied("PAPER refused: the risk engine in use was not loaded from the approved policy (sha256 differs)")
     if (p["strategy_id"], p["strategy_version"]) != (strategy_id, strategy_version):
         raise ModeDenied("PAPER refused: approval is for a different strategy/version")
     if not {int(i) for i in instruments} <= set(p["instruments"]):

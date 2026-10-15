@@ -10,6 +10,8 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+import re
+import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -21,8 +23,8 @@ from tradelab.execution.broker import (BrokerDisconnected, BrokerEvent, BrokerPo
 from tradelab.execution.common import D, canon, iso, sha256_hex
 from tradelab.execution.db import kv_get, kv_set, open_db, tx
 from tradelab.execution.intents import ENTRY, EXIT, PROTECTIVE, IntentLedger, Proposal, make_intent_id
-from tradelab.execution.modes import Mode, ModeDenied, assert_may_submit
-from tradelab.execution.permit import mint_permit
+from tradelab.execution.modes import KEY_ENV, Mode, ModeDenied, assert_may_submit, verify_approval
+from tradelab.execution.permit import PermitAuthority
 from tradelab.execution.risk import Quote, RiskDecision, RiskEngine, RiskInputs, is_reducing
 
 
@@ -44,18 +46,30 @@ class ExecutionService:
     def __init__(self, db_path: str, mode: Mode, broker: BrokerPort, risk: RiskEngine, quote_source: Callable[[int], Quote | None],
                  clock: Callable[[], datetime], *, registry_state: Callable | None = None, risk_policy_path: Path | None = None,
                  approval_path: Path | None = None, env=None, correlations=None, margin_hook: Callable | None = None,
-                 ack_timeout_seconds: int = 10, lock_path: str | None = None):
+                 ack_timeout_seconds: int = 10, lock_path: str | None = None, lock_dir: str | None = None, max_clock_skew_seconds: int = 120):
         mode = Mode(mode)
         if mode is Mode.LIVE:
             raise ModeDenied("LIVE is refused unconditionally")
+        if mode is Mode.PAPER and db_path == ":memory:":
+            raise ModeDenied("PAPER refused: a persistent, file-backed ledger is required (':memory:' forgets intents on restart)")
         self.__mode = mode                      # name-mangled, exposed read-only
         self.broker, self.risk, self.quote_source, self.clock = broker, risk, quote_source, clock
         self._registry_state, self._policy_path, self._approval_path, self._env = registry_state, risk_policy_path, approval_path, env
         self._corr, self._margin_hook, self._ack_timeout = correlations, margin_hook, ack_timeout_seconds
-        self._lock_fh = None
+        self._lock_fh, self._acct_lock_fh = None, None
+        self._lock_dir, self._max_skew = lock_dir, max_clock_skew_seconds
+        key = (env if env is not None else os.environ).get(KEY_ENV)
+        self.__permits = PermitAuthority(key.encode() if key else None)    # private capability: signs permits, tags/verifies orderRefs
+        self._paper_block: str | None = None
+        self._approved_account: str | None = None
+        if mode is Mode.PAPER:
+            self._paper_block = self._check_paper_binding()
         if db_path != ":memory:":
             self._acquire_lock(lock_path or db_path + ".lock")
+            self._acquire_account_lock()
         self.conn = open_db(db_path)
+        if hasattr(broker, "bind_authority"):       # real adapters only act for THIS service (one-shot binding)
+            broker.bind_authority(self.__permits.consume, self.__permits.make_ref, self.__permits.parse_ref)
         self.intents = IntentLedger(self.conn)
         self.orders = O.OrderBook(self.conn, self.incident)
         self.reconciled = False
@@ -75,11 +89,54 @@ class ExecutionService:
         fh.seek(0); fh.truncate(); fh.write(str(os.getpid())); fh.flush()
         self._lock_fh = fh
 
+    def _check_paper_binding(self) -> str | None:
+        """Construction-time PAPER check: the approval must verify and bind the policy the RiskEngine actually enforces. Returns a
+        reason string (and the service then refuses every order) instead of raising, so the operator sees an incident, not a crash."""
+        try:
+            key = (self._env if self._env is not None else os.environ).get(KEY_ENV)
+            if not key or self._approval_path is None:
+                raise ModeDenied("PAPER refused: approval key or approval path missing")
+            payload = verify_approval(Path(self._approval_path), key.encode(), now_utc=self.clock())
+            if payload["risk_policy_sha256"] != self.risk.policy.sha256:
+                raise ModeDenied("PAPER refused: the RiskEngine's policy sha256 differs from the approved policy")
+            self._approved_account = payload["account_id"]
+            return None
+        except ModeDenied as e:
+            return str(e)
+
+    def _acquire_account_lock(self):
+        """One writer per broker ACCOUNT (not only per ledger file): lock file named by the account id, in the user's home dir."""
+        acct = self._approved_account
+        if acct is None:
+            try:
+                acct = self.broker.account().account_id
+            except Exception:
+                acct = None
+        if acct is None:
+            if self.mode is Mode.PAPER:
+                raise ModeDenied("PAPER refused: cannot determine the account id for the per-account lock")
+            return
+        simulated = bool(getattr(self.broker, "is_simulated", False))
+        d = Path(self._lock_dir or (self._env if self._env is not None else os.environ).get("TRADELAB_LOCK_DIR") or
+                 (Path(tempfile.gettempdir()) / "tradelab_sim_locks" if simulated else Path.home() / ".tradelab_locks"))
+        d.mkdir(parents=True, exist_ok=True)
+        name = re.sub(r"[^A-Za-z0-9_.-]", "_", f"account_{acct}") + (f"_{os.getpid()}_{id(self.broker)}" if simulated else "") + ".lock"
+        fh = open(d / name, "a+")
+        try:
+            fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as e:
+            fh.close()
+            raise WriterLockHeld(f"another execution service already drives account {acct} ({d / name})") from e
+        fh.seek(0); fh.truncate(); fh.write(str(os.getpid())); fh.flush()
+        self._acct_lock_fh = fh
+
     def close(self):
-        if self._lock_fh:
-            fcntl.flock(self._lock_fh, fcntl.LOCK_UN)
-            self._lock_fh.close()
-            self._lock_fh = None
+        for attr in ("_lock_fh", "_acct_lock_fh"):
+            fh = getattr(self, attr)
+            if fh:
+                fcntl.flock(fh, fcntl.LOCK_UN)
+                fh.close()
+                setattr(self, attr, None)
         self.conn.close()
 
     # ------------------------------------------------------------ persisted control state
@@ -151,12 +208,20 @@ class ExecutionService:
                 found.append(f"unknown broker order {o.broker_order_id}")
                 self.incident("UNKNOWN_BROKER_ORDER", "high", {"broker_order_id": o.broker_order_id, "con_id": o.con_id})
         ledger_pos = self.orders.positions()
+        mism = []
         for cid in set(ledger_pos) | set(b_pos):
             if ledger_pos.get(cid, Decimal(0)) != b_pos.get(cid, Decimal(0)):
+                mism.append(cid)
                 found.append(f"position mismatch {cid}")
                 self.incident("POSITION_MISMATCH", "high", {"con_id": cid, "ledger": str(ledger_pos.get(cid, 0)), "broker": str(b_pos.get(cid, 0))})
         if self.orders.by_state(O.UNCERTAIN):
             found.append("uncertain orders remain")
+        corr = list(getattr(self.broker, "unresolved_corrections", None) or [])
+        if corr:
+            found.append("execution corrections need human review")
+            self.incident("EXECUTION_CORRECTION_REVIEW", "high", {"exec_ids": corr[:10]})
+        kv_set(self.conn, "mismatch_cons", sorted(mism))
+        kv_set(self.conn, "ack_cons", [c for c in kv_get(self.conn, "ack_cons", []) if c in mism])
         kv_set(self.conn, "recon_blocked", bool(found))
         self.reconciled = True
         return {"ok": not found, "findings": found}
@@ -244,10 +309,41 @@ class ExecutionService:
         except O.IllegalTransition:
             pass
 
+    def acknowledge_position_mismatch(self, con_id: int, operator: str, note: str) -> None:
+        """Operator-only: acknowledge that the ledger and broker disagree on `con_id` so an explicit flatten/exit may be sent. New ENTRIES stay
+        blocked until a clean reconcile(). The acknowledgement lapses when reconciliation no longer reports the mismatch."""
+        ack = set(kv_get(self.conn, "ack_cons", []))
+        ack.add(int(con_id))
+        kv_set(self.conn, "ack_cons", sorted(ack))
+        self.incident("POSITION_MISMATCH_ACKNOWLEDGED", "high", {"con_id": con_id, "operator": operator, "note": note})
+
+    def acknowledge_execution_corrections(self, operator: str, note: str) -> None:
+        """Operator-only: after reviewing corrected executions in the broker UI, clear the adapter's pending-correction list."""
+        clear = getattr(self.broker, "acknowledge_corrections", None)
+        if callable(clear):
+            clear()
+        self.incident("EXECUTION_CORRECTION_ACKNOWLEDGED", "high", {"operator": operator, "note": note})
+
     # ------------------------------------------------------------ inputs for risk
-    def _risk_inputs(self, p: Proposal) -> RiskInputs:
+    def _working_same_side(self) -> dict:
+        out: dict = {}
+        for r in self.orders.by_state(O.SUBMITTING, O.ACKED, O.PARTIAL, O.CANCEL_PENDING, O.UNCERTAIN):
+            rem = D(r["qty"]) - D(r["filled_qty"])
+            if rem > 0:
+                out[(r["con_id"], r["side"])] = out.get((r["con_id"], r["side"]), Decimal(0)) + rem
+        return out
+
+    def _risk_inputs(self, p: Proposal, frequency_exempt: bool = False) -> RiskInputs:
         now = self.clock()
-        x = RiskInputs(now_utc=now, positions=self.orders.positions(), correlations=self._corr)
+        x = RiskInputs(now_utc=now, positions=self.orders.positions(), correlations=self._corr, frequency_exempt=frequency_exempt)
+        x.working_same_side = self._working_same_side()
+        x.mismatch_con_ids = frozenset(set(kv_get(self.conn, "mismatch_cons", [])) - set(kv_get(self.conn, "ack_cons", [])))
+        if self.mode is Mode.PAPER:       # the approval's capital allocation is a hard cap on gross exposure (0 if the approval cannot be verified)
+            try:
+                key = (self._env if self._env is not None else os.environ).get(KEY_ENV)
+                x.capital_cap = D(verify_approval(Path(self._approval_path), key.encode(), now_utc=now)["capital_allocation"])
+            except Exception:
+                x.capital_cap = Decimal(0)
         try:
             acc = self.broker.account()
             x.equity, x.available_funds, x.account_ts = acc.equity, acc.available_funds, acc.ts
@@ -284,6 +380,9 @@ class ExecutionService:
 
     # ------------------------------------------------------------ submit path
     def propose(self, p: Proposal) -> SubmitResult:
+        return self._propose(p, False)
+
+    def _propose(self, p: Proposal, frequency_exempt: bool) -> SubmitResult:
         now = self.clock()
         row, created = self.intents.insert(p, self.mode.value, now)
         iid = row["intent_id"]
@@ -296,7 +395,7 @@ class ExecutionService:
                 return SubmitResult(iid, status, reasons, True, existing[-1]["client_order_id"])
             if row["status"] != "PROPOSED":
                 return SubmitResult(iid, "DUPLICATE", ("DUPLICATE_SIGNAL",), True)
-        x = self._risk_inputs(p)
+        x = self._risk_inputs(p, frequency_exempt)
         decision = self.risk.evaluate(p, x, iid)
         reasons = list(decision.reasons)
         reducing = decision.reducing
@@ -328,10 +427,22 @@ class ExecutionService:
             return SubmitResult(iid, "SHADOWED", (), False, None, decision)
         # mode gate immediately before the broker port (re-evaluated every time: approvals expire)
         try:
+            gate_now = now
+            if self.mode is Mode.PAPER:
+                if self._paper_block:
+                    raise ModeDenied(self._paper_block)
+                try:
+                    bt = self.broker.server_time()
+                except Exception as e:
+                    raise ModeDenied(f"PAPER refused: broker time unavailable ({type(e).__name__})") from e
+                if abs((bt - now).total_seconds()) > self._max_skew:
+                    raise ModeDenied(f"PAPER refused: local clock and broker time differ by more than {self._max_skew}s")
+                gate_now = max(now, bt)               # approval expiry is judged on the later of the two clocks
             approval = assert_may_submit(self.mode, broker_is_simulated=getattr(self.broker, "is_simulated", False),
                               registry_state=self._registry_state, strategy_id=p.strategy_id, strategy_version=p.strategy_version,
                               instruments=[p.con_id], risk_policy_path=self._policy_path, approval_path=self._approval_path,
-                              broker_account_id=self._safe_account_id(), now_utc=now, env=self._env)
+                              broker_account_id=self._safe_account_id(), now_utc=gate_now, env=self._env,
+                              engine_policy_sha256=self.risk.policy.sha256 if self.mode is Mode.PAPER else None)
         except ModeDenied as e:
             self.intents.set_status(iid, "BLOCKED", decision.decision_id)
             return SubmitResult(iid, "BLOCKED", (f"MODE_GATE:{e}",), False, None, decision)
@@ -349,7 +460,7 @@ class ExecutionService:
         self.intents.set_status(iid, "SENT", decision.decision_id)
         permit = None
         if self.mode is Mode.PAPER and approval is not None:
-            permit = mint_permit(approval, intent_id=iid, client_order_id=coid, con_id=p.con_id, side=p.side, qty=D(p.qty),
+            permit = self.__permits.mint(approval, intent_id=iid, client_order_id=coid, con_id=p.con_id, side=p.side, qty=D(p.qty),
                                  order_type=p.order_type, limit_px=p.limit_px, stop_px=p.stop_px, tif=p.tif, outside_rth=p.outside_rth, now=now)
         req = OrderRequest(coid, p.con_id, p.side, D(p.qty), p.order_type, p.limit_px, p.stop_px, p.tif, p.outside_rth, intent_id=iid, permit=permit)
         try:
@@ -418,8 +529,12 @@ class ExecutionService:
     def flatten_strategy_positions(self, strategy_id: str, version: str | None = None) -> dict:
         """Send risk-REDUCING market orders for the strategy's fill-derived positions. Returns what ACTUALLY happened after one event
         pass: per instrument requested qty, filled qty, residual exposure, status. It may fail or fill poorly; a stop order does not
-        cap loss (gaps, slippage); nothing here claims otherwise. Working protective orders are left in place and are cancelled
-        only after the position is observed flat."""
+        cap loss (gaps, slippage); nothing here claims otherwise.
+
+        Reducing capacity counts every live exit, so a flatten can never stack on top of a working stop/exit and flip the position:
+        for each instrument the strategy's OTHER working exit/protective orders get a cancel REQUEST first, and the flatten order is
+        accepted only once the cancel acks have freed capacity (the stop keeps protecting until then). If it is blocked, the report says so
+        and the operator calls flatten again after the acks. A second flatten while the first is live is blocked by the same rule."""
         pos = self.orders.positions(strategy_id)
         if version is None:      # the flatten order belongs to the strategy version that opened the position (approvals bind the version)
             r = self.conn.execute("SELECT strategy_version FROM intents WHERE strategy_id=? ORDER BY created_utc DESC, rowid DESC LIMIT 1", (strategy_id,)).fetchone()
@@ -428,9 +543,16 @@ class ExecutionService:
         kv_set(self.conn, "flatten_seq", seq)
         report = {"strategy_id": strategy_id, "instruments": {}}
         sent = {}
+        for cid in pos:
+            for row in self.conn.execute(
+                    "SELECT o.client_order_id FROM orders o JOIN intents i ON i.intent_id=o.intent_id WHERE o.strategy_id=? AND o.con_id=? "
+                    "AND o.state IN ('ACKED','PARTIALLY_FILLED') AND o.purpose IN ('protective','exit') AND i.signal_id NOT LIKE 'flatten-%'",
+                    (strategy_id, cid)).fetchall():
+                self._request_cancel(self.orders.get(row["client_order_id"]), "flatten: free reducing capacity")
+        self.process_events()
         for cid, q in pos.items():
             p = Proposal(strategy_id, version, f"flatten-{seq}", cid, str(cid), -1 if q > 0 else 1, abs(q), "MKT", purpose=EXIT)
-            r = self.propose(p)
+            r = self._propose(p, True)
             sent[cid] = (r, abs(q))
         self.process_events()
         after = self.orders.positions(strategy_id)

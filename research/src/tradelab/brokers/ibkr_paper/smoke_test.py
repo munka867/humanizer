@@ -194,6 +194,8 @@ def run(argv=None, *, ib_module=None, input_fn=input, env=None, clock=utcnow, sl
             adapter.disconnect()
         except Exception:
             pass
+        if svc is not None:
+            svc.close()          # releases the ledger and per-account locks
 
 
 def _wait_basic(svc, sleep, pred, timeout):

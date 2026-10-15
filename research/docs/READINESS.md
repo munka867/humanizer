@@ -5,7 +5,7 @@
 **Bottom line: nothing has ever touched a real or paper broker. A real paper pilot has not been run. The user's IBKR account is unfunded, and IBKR states a paper account requires an approved and funded live account (D15). No strategy in this project has shown positive net expectancy (docs/DAILY_RESULTS.md, docs/TREND_RESULTS.md), so there is nothing worth trading yet.**
 
 ## Local tests (simulated broker, deterministic) - `python -m pytest tests/test_exec_*.py -q`
-Run on 2026-10-15: tests/test_exec_*.py **90 passed**; tests/test_paper_*.py **99 passed** (fake ib_async only); full suite **788 passed, 1 skipped, 3 xfailed**. These prove the machinery's logic against scripted faults; they do not prove behaviour against IBKR.
+Run on 2026-10-15: tests/test_exec_*.py, tests/test_paper_*.py (fake ib_async only) and the broker review tests pass after the phase-6 fixes; full suite 868 passed, 1 skipped, 5 xfailed. These prove the machinery's logic against scripted faults; they do not prove behaviour against IBKR.
 
 | area | implemented | tested vs simulated broker |
 |---|---|---|
@@ -64,3 +64,11 @@ The smoke test (`python -m tradelab.brokers.ibkr_paper.smoke_test`) is the first
 - Flatten + protective stop can double-fill (see EXECUTION_DESIGN section 8).
 - The simulated broker is simple; IBKR/TWS callback semantics (error codes, order-id reuse, delayed executions, 'inactive' orders, competing sessions) are not modelled.
 - Single-host file lock only; not safe on network filesystems.
+
+
+## Phase-6 audit status (2026-10-15)
+Fixed against fakes: P6-02, 03, 04, 05 (+05b), 06, 07, 08, 10, 11, 12, 13, 09 (see docs/EXECUTION_DESIGN.md section 12). **Accepted, not fixable in code: P6-01** - code
+running inside the execution process can bypass every in-process control (permits, approval checks, risk engine) and can call the broker library directly. The protection is
+operational only: run the execution service as a separate OS process on the user's own computer with CC_APPROVAL_KEY set only there, keep TWS Read-Only API ON except during the
+user's smoke test, and never let an assistant run code on that machine. New limitation: execution-correction handling and clock-skew checks encode unverified assumptions about
+TWS; the reducing-capacity rule makes a flatten wait for stop-cancel acks (the position stays exposed but protected meanwhile). Nothing here has run against a real TWS.

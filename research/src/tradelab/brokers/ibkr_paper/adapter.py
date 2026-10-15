@@ -1,7 +1,8 @@
 """IbkrPaperBroker: BrokerPort implementation over ib_async, PAPER ONLY.
 
 * Lazy, optional ib_async (pin 2.1.0, BSD-2-Clause). Tests inject a fake module; nothing here runs unless a user calls connect().
-* Every order: STK only, USD/CAD, MKT/LMT/STP, DAY/GTC, outsideRth False unless allowed, account set explicitly, orderRef = intent_id.
+* Every order: STK only, USD/CAD, MKT/LMT/STP, DAY/GTC, outsideRth False unless allowed, account set explicitly, orderRef = versioned HMAC-tagged
+  reference of the intent id (made by the bound service; foreign or untagged refs never map to our orders).
 * An order is accepted only with a valid PaperOrderPermit minted by ExecutionService for THAT order (single use, short expiry).
 * Callbacks are mapped to BrokerEvents idempotently. An orderStatus is never a fill; fills come from execDetails (reqExecutions at reconcile).
 * Ambiguous outcomes become 'uncertain' events (never blind retry); connectivity changes become 'resync_required'."""
@@ -18,7 +19,7 @@ from tradelab.brokers.ibkr_paper import guard as G
 from tradelab.execution.broker import (AccountInfo, BrokerDisconnected, BrokerEvent, BrokerOrder, BrokerRefused, BrokerTimeout, OrderRequest)
 from tradelab.execution.common import D, utcnow
 from tradelab.execution.orders import client_order_id_for
-from tradelab.execution.permit import PermitError, consume_permit
+from tradelab.execution.permit import PermitError
 from tradelab.execution.risk import Quote
 
 ALLOWED_CURRENCIES = ("USD", "CAD")
@@ -85,6 +86,18 @@ class IbkrPaperBroker:
         self.diagnostics: list[dict] = []            # plain-language audit of every mapped error / refusal
         self.connected = False
         self.needs_reconcile = False
+        self._consume = self._make_ref = self._parse_ref = None      # bound once by ExecutionService (bind_authority)
+        self.unresolved_corrections: list[str] = []
+        self._exec_base: dict[str, str] = {}
+
+    def bind_authority(self, consume, make_ref, parse_ref):
+        """One-shot: the ExecutionService hands over its permit verifier and orderRef tagger. An unbound adapter refuses every order."""
+        if self._consume is not None:
+            raise RuntimeError("adapter is already bound to an ExecutionService")
+        self._consume, self._make_ref, self._parse_ref = consume, make_ref, parse_ref
+
+    def acknowledge_corrections(self):
+        self.unresolved_corrections = []
 
     # ------------------------------------------------------------------ connection
     def connect(self):
@@ -124,10 +137,20 @@ class IbkrPaperBroker:
 
     # ------------------------------------------------------------------ id mapping
     @staticmethod
-    def _coid(order_ref, order_id=0, perm_id=0) -> str:
-        if order_ref and _INTENT_RE.match(order_ref):
-            return client_order_id_for(order_ref)
+    def _coid(order_ref, order_id=0, perm_id=0, parse=None) -> str:
+        """Client order id of OUR order, only if the orderRef carries a valid HMAC tag (versioned format); anything else is FOREIGN."""
+        iid = parse(order_ref) if parse is not None else None
+        if iid and _INTENT_RE.match(iid):
+            return client_order_id_for(iid)
         return f"FOREIGN-{order_id or perm_id or 'x'}"
+
+    def _cid(self, order_ref, order_id=0, perm_id=0) -> str:
+        return self._coid(order_ref, order_id, perm_id, self._parse_ref)
+
+    @staticmethod
+    def _exec_stem(exec_id: str) -> str:
+        """IBKR convention (UNVERIFIED here): a corrected execution re-uses the id with a higher last revision component."""
+        return exec_id.rsplit(".", 1)[0] if "." in exec_id else exec_id
 
     def _emit(self, kind, coid, **kw):
         self._events.append(BrokerEvent(kind, coid, ts=self._clock(), **kw))
@@ -135,7 +158,7 @@ class IbkrPaperBroker:
     # ------------------------------------------------------------------ callbacks
     def _on_status(self, trade):
         o, s = trade.order, trade.orderStatus
-        coid = self._coid(getattr(o, "orderRef", ""), getattr(o, "orderId", 0), getattr(s, "permId", 0))
+        coid = self._cid(getattr(o, "orderRef", ""), getattr(o, "orderId", 0), getattr(s, "permId", 0))
         bid = str(getattr(o, "orderId", 0) or getattr(s, "permId", 0))
         st = s.status
         if st in ACK_STATUSES and coid not in self._acked:
@@ -159,8 +182,17 @@ class IbkrPaperBroker:
         if acct and acct not in self.accounts:
             self._diag("foreign_account_execution", exec_id=ex.execId)
             return
+        stem = self._exec_stem(ex.execId)
+        if stem in self._exec_base and self._exec_base[stem] != ex.execId:
+            # same execution re-sent with another revision: do NOT auto-count; a human must review before new entries
+            self.unresolved_corrections.append(ex.execId)
+            self._diag("execution_correction", exec_id=ex.execId, first_seen=self._exec_base[stem])
+            self._exec_seen.add(ex.execId)
+            self._emit("resync_required", "", reason=f"execution {ex.execId} looks like a correction of {self._exec_base[stem]}; human review required")
+            return
+        self._exec_base[stem] = ex.execId
         self._exec_seen.add(ex.execId)
-        coid = self._coid(getattr(ex, "orderRef", "") or getattr(trade.order, "orderRef", ""), ex.orderId, ex.permId)
+        coid = self._cid(getattr(ex, "orderRef", "") or getattr(trade.order, "orderRef", ""), ex.orderId, ex.permId)
         qty = D(ex.shares)
         self._filled_seen[coid] = self._filled_seen.get(coid, Decimal(0)) + qty
         self._events.append(BrokerEvent("fill", coid, str(ex.orderId or ex.permId), ex.execId, fill.contract.conId,
@@ -289,14 +321,19 @@ class IbkrPaperBroker:
             self._require()
         except BrokerDisconnected as e:
             raise BrokerRefused("not connected to TWS; nothing was sent") from e
+        if self._consume is None:
+            raise BrokerRefused("adapter is not bound to an ExecutionService; orders are refused")
         try:
-            consume_permit(req.permit, req, self._clock())
+            self._consume(req.permit, req, self._clock())
             permit = req.permit
             G.check_order_account(permit.account_id, self.accounts, self.expected_account)
             contract = self._contract(req.con_id)
-            order = self._build_order(req, permit.account_id, req.intent_id)
             if not req.intent_id or not _INTENT_RE.match(req.intent_id):
                 raise BrokerRefused("intent id missing: orderRef could not be set")
+            ref = self._make_ref(req.intent_id)
+            if not ref:
+                raise BrokerRefused("orderRef could not be tagged (approval key unavailable to the service); order not sent")
+            order = self._build_order(req, permit.account_id, ref)
             if self._whatif_on_submit and self._whatif(contract, order) is False:
                 raise BrokerRefused("what-if margin check failed or carries a warning; order not sent")
         except PermitError as e:
@@ -322,7 +359,7 @@ class IbkrPaperBroker:
         trade = self._trades.get(client_order_id)
         if trade is None:
             for t in self.ib.openTrades():
-                if self._coid(getattr(t.order, "orderRef", ""), t.order.orderId, t.orderStatus.permId) == client_order_id:
+                if self._cid(getattr(t.order, "orderRef", ""), t.order.orderId, t.orderStatus.permId) == client_order_id:
                     trade = t
         if trade is None:
             self._emit("cancel_reject", client_order_id, reason="order not found at this client; reconcile")
@@ -341,7 +378,7 @@ class IbkrPaperBroker:
             o, s = t.order, t.orderStatus
             if not self._mine(getattr(o, "account", "")) or s.status not in WORKING_STATUSES:
                 continue
-            out.append(BrokerOrder(str(o.orderId or s.permId), self._coid(getattr(o, "orderRef", ""), o.orderId, s.permId), t.contract.conId,
+            out.append(BrokerOrder(str(o.orderId or s.permId), self._cid(getattr(o, "orderRef", ""), o.orderId, s.permId), t.contract.conId,
                                    1 if o.action == "BUY" else -1, D(o.totalQuantity), D(s.filled), o.orderType,
                                    None if _f(o.lmtPrice) in (None, 0.0) else D(o.lmtPrice),
                                    None if _f(o.auxPrice) in (None, 0.0) else D(o.auxPrice), "working"))
@@ -349,12 +386,19 @@ class IbkrPaperBroker:
 
     def executions(self) -> list[BrokerEvent]:
         self._require()
-        out = []
+        out, stems = [], {}
         for f in self.ib.reqExecutions():
             ex = f.execution
             if not self._mine(getattr(ex, "acctNumber", "")):
                 continue
-            out.append(BrokerEvent("fill", self._coid(getattr(ex, "orderRef", ""), ex.orderId, ex.permId), str(ex.orderId or ex.permId), ex.execId,
+            stem = self._exec_stem(ex.execId)
+            if stem in stems and stems[stem] != ex.execId:         # correction: keep the first, flag for human review
+                if ex.execId not in self.unresolved_corrections:
+                    self.unresolved_corrections.append(ex.execId)
+                self._diag("execution_correction", exec_id=ex.execId, first_seen=stems[stem])
+                continue
+            stems[stem] = ex.execId
+            out.append(BrokerEvent("fill", self._cid(getattr(ex, "orderRef", ""), ex.orderId, ex.permId), str(ex.orderId or ex.permId), ex.execId,
                                    f.contract.conId, 1 if str(ex.side).upper() in ("BOT", "BUY") else -1, D(ex.shares), D(ex.price),
                                    getattr(f, "time", None) or self._clock()))
         return out

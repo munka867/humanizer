@@ -140,7 +140,7 @@ def test_service_in_paper_mode_blocks_orders_without_valid_approval(tmp_path):
                      approval_path=tmp_path / "missing.json", env=ENV)
     svc.start()
     r = svc.propose(entry())
-    assert r.status == "BLOCKED" and any(x.startswith("MODE_GATE") for x in r.reasons)
+    assert r.status == "BLOCKED" and svc._paper_block and "approval" in svc._paper_block      # construction-time check latched the refusal
     assert b.open_orders() == []
 
 
@@ -157,11 +157,11 @@ def test_approve_cli_exists_refuses_without_key_and_signs_with_key(tmp_path, mon
     assert e.value.code == 0
     monkeypatch.delenv(KEY_ENV, raising=False)
     out = tmp_path / "a.json"
-    argv = ["--account", "SIM-0001", "--instruments", "1001", "--strategy-id", "stratA", "--strategy-version", "v1", "--capital", "5000",
+    argv = ["--account", "DUSIM0001", "--instruments", "1001", "--strategy-id", "stratA", "--strategy-version", "v1", "--capital", "5000",
             "--risk-policy", str(POLICY), "--out", str(out)]
     assert AP.main(argv) == 2 and not out.exists()
     monkeypatch.setenv(KEY_ENV, "k")
     assert AP.main(argv) == 0
     import datetime as dt
     payload = verify_approval(out, b"k", now_utc=dt.datetime.now(dt.timezone.utc))
-    assert payload["account_id"] == "SIM-0001"
+    assert payload["account_id"] == "DUSIM0001"

@@ -60,5 +60,5 @@ def make_paper(tmp_path, *, name="p.db", fake=None, clock=None, account=ACCT, ex
     svc = ExecutionService(str(tmp_path / name), Mode.PAPER, port, RiskEngine.from_file(POLICY), lambda cid: adapter.quote(cid), clock,
                            registry_state=lambda s, v: "approved_paper", risk_policy_path=POLICY,
                            approval_path=approval(tmp_path, account=account_override or account, clock_t=clock()), env=ENV, margin_hook=hook,
-                           correlations={(SPY, QQQ): Dc("0.9")})
+                           correlations={(SPY, QQQ): Dc("0.9")}, lock_dir=str(tmp_path / ("locks_" + name)))
     return svc, adapter, fake, clock, port

@@ -142,6 +142,10 @@ class RiskInputs:
     correlations: Mapping[tuple, Decimal] | None = None     # {(a,b): rho}, symmetric lookup
     recent_order_times: tuple = ()                           # UTC datetimes of submissions today
     margin_ok: bool | None = None                            # result of the margin hook for THIS proposal
+    working_same_side: Mapping[tuple, Decimal] | None = None  # {(con_id, side): remaining qty of LIVE orders (submitting/working/cancel-pending/uncertain)}
+    mismatch_con_ids: frozenset = frozenset()                # instruments with an unacknowledged ledger/broker position mismatch
+    capital_cap: Decimal | None = None                       # approval's capital_allocation (hard cap on gross exposure), None = no approval cap
+    frequency_exempt: bool = False                           # service-internal (operator flatten); strategies cannot set it
 
 
 @dataclass(frozen=True)
@@ -156,11 +160,15 @@ class RiskDecision:
     details: dict = field(default_factory=dict)
 
 
-def is_reducing(positions: Mapping[int, Decimal] | None, con_id: int, side: int, qty: Decimal) -> bool:
-    if not positions:
+def is_reducing(positions: Mapping[int, Decimal] | None, con_id: int, side: int, qty: Decimal, working: Decimal = Decimal(0),
+                mismatch: bool = False) -> bool:
+    """True only if the order is opposite to the FILLED position and fits in the remaining reducing capacity
+    |position| - (remaining qty of live same-side orders). Stacked exits therefore cannot flip a position. The exemption is
+    withdrawn on an instrument with an unresolved ledger/broker mismatch."""
+    if not positions or mismatch:
         return False
     cur = positions.get(con_id, Decimal(0))
-    return cur != 0 and (cur > 0) == (side < 0) and D(qty) <= abs(cur)
+    return cur != 0 and (cur > 0) == (side < 0) and D(qty) <= abs(cur) - D(working)
 
 
 class RiskEngine:
@@ -181,10 +189,17 @@ class RiskEngine:
     def evaluate(self, p: Proposal, x: RiskInputs, intent_id: str | None = None) -> RiskDecision:
         pol = self._policy
         qty, reasons = D(p.qty), []
-        reducing = is_reducing(x.positions, p.con_id, p.side, qty)
-        details: dict = {"qty": str(qty), "con_id": p.con_id, "side": p.side, "purpose": p.purpose}
+        working = (x.working_same_side or {}).get((p.con_id, p.side), Decimal(0))
+        reducing = is_reducing(x.positions, p.con_id, p.side, qty, working, p.con_id in x.mismatch_con_ids)
+        details: dict = {"qty": str(qty), "con_id": p.con_id, "side": p.side, "purpose": p.purpose, "working_same_side": str(working)}
         if not reducing:
-            self._check_new_exposure(p, x, qty, reasons, details)
+            if p.purpose != ENTRY:       # a label never exempts: exit/protective orders that are not truly reducing get every entry check
+                reasons.append("NOT_REDUCING:exit/protective order exceeds the position, working exits, or the position is unreconciled")
+            sub: list = []
+            self._check_new_exposure(p, x, qty, sub, details)
+            reasons.extend(sub)
+        if x.now_utc is not None and not x.frequency_exempt:
+            self._check_frequency(x, reasons)
         return RiskDecision(decision_id=sha256_hex(canon([intent_id, iso(x.now_utc), reasons, details]))[:24],
                             allowed=not reasons, reducing=reducing, reasons=tuple(reasons), policy_hash=pol.sha256,
                             policy_version=pol.version, ts=iso(x.now_utc), details=details)
@@ -235,7 +250,9 @@ class RiskEngine:
                 R.append("SLIPPAGE_TOO_LARGE")
         # ---- position / short
         cur = x.positions.get(p.con_id, Decimal(0))
-        post = cur + p.side * qty
+        pending = (x.working_same_side or {}).get((p.con_id, p.side), Decimal(0))      # live same-side orders will add to the position if filled
+        post = cur + p.side * (pending + qty)
+        det["post_position_incl_pending"] = str(post)
         if abs(post) > rule.max_position_qty:
             R.append("MAX_POSITION")
         if post < 0:
@@ -244,15 +261,14 @@ class RiskEngine:
             elif (x.shortable or {}).get(p.con_id) is not True:
                 R.append("NOT_CONFIRMED_SHORTABLE")
         # ---- per-trade risk (needs a planned stop)
-        if p.purpose == ENTRY:
-            if p.stop_px is None:
-                R.append("NO_STOP_FOR_RISK")
-            else:
-                ref = D(p.limit_px) if p.order_type == "LMT" else mid
-                risk = abs(ref - D(p.stop_px)) * qty * rule.multiplier
-                det["trade_risk"] = str(risk)
-                if risk > pol.max_risk_per_trade:
-                    R.append("MAX_RISK_PER_TRADE")
+        if p.stop_px is None:                  # every non-reducing order, whatever its purpose label says
+            R.append("NO_STOP_FOR_RISK")
+        else:
+            ref = D(p.limit_px) if p.order_type == "LMT" else mid
+            risk = abs(ref - D(p.stop_px)) * qty * rule.multiplier
+            det["trade_risk"] = str(risk)
+            if risk > pol.max_risk_per_trade:
+                R.append("MAX_RISK_PER_TRADE")
         # ---- account level
         daily_loss = x.day_start_equity - x.equity
         det["daily_loss"] = str(daily_loss)
@@ -284,8 +300,10 @@ class RiskEngine:
         else:
             gross, net = sum((abs(v) for v in notion.values()), Decimal(0)), sum(notion.values(), Decimal(0))
             det.update(gross=str(gross), net=str(net))
-            if gross > pol.max_gross_exposure:
-                R.append("MAX_GROSS_EXPOSURE")
+            cap = pol.max_gross_exposure if x.capital_cap is None else min(pol.max_gross_exposure, x.capital_cap)
+            det["gross_cap"] = str(cap)
+            if gross > cap:
+                R.append("MAX_GROSS_EXPOSURE" if cap == pol.max_gross_exposure else "CAPITAL_ALLOCATION_EXCEEDED")
             if abs(net) > pol.max_net_exposure:
                 R.append("MAX_NET_EXPOSURE")
             corr_sum = abs(notion.get(p.con_id, Decimal(0)))
@@ -299,8 +317,10 @@ class RiskEngine:
                     corr_sum += abs(v)
             if corr_sum > pol.max_correlated_exposure:
                 R.append("MAX_CORRELATED_EXPOSURE")
-        # ---- order frequency
-        recent = [t for t in x.recent_order_times]
+
+    def _check_frequency(self, x: RiskInputs, R: list):
+        pol = self._policy
+        recent = list(x.recent_order_times)
         last_min = sum(1 for t in recent if 0 <= (x.now_utc - t).total_seconds() < 60)
         if last_min >= pol.max_orders_per_minute:
             R.append("ORDER_FREQUENCY_PER_MINUTE")

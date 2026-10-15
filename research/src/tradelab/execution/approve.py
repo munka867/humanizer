@@ -19,6 +19,8 @@ from pathlib import Path
 from tradelab.execution.common import sha256_hex, utcnow
 from tradelab.execution.modes import KEY_ENV, make_approval
 
+MAX_VALID_HOURS = 24.0
+
 
 def build_record(key: bytes, args) -> dict:
     now = utcnow()
@@ -40,6 +42,12 @@ def main(argv=None) -> int:
     ap.add_argument("--valid-hours", type=float, default=24.0)
     ap.add_argument("--out", default="configs/approvals/paper_approval.json")
     a = ap.parse_args(argv)
+    if not a.account.startswith("DU"):
+        print("Refused: only paper accounts (ids starting with DU) can be approved.", file=sys.stderr)
+        return 2
+    if not (0 < a.valid_hours <= MAX_VALID_HOURS):
+        print(f"Refused: --valid-hours must be > 0 and at most {MAX_VALID_HOURS}.", file=sys.stderr)
+        return 2
     key = os.environ.get(KEY_ENV)
     if not key:
         print(f"{KEY_ENV} not set; refusing.", file=sys.stderr)

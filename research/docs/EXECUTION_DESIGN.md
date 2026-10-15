@@ -96,7 +96,7 @@ Single instrument per replay runner; daily-loss measured from equity (needs a re
 ## 11. PAPER adapter (`tradelab/brokers/ibkr_paper`) - added 2026-10-15, fake-tested only
 Dependency direction: `brokers.ibkr_paper -> execution`; never the reverse; `command_center` imports neither. ib_async (pin 2.1.0, BSD-2-Clause, optional,
 lazy import) may be imported only in `brokers/ibkr_paper` and `command_center/ibkr` (static test); `ibapi`/`ib_insync` nowhere.
-* `guard.py`: loopback host only; ports 7497 and 4002 only, no override; clientId fixed at 21 (data adapter uses 11-19); after connect every managed account
+* `guard.py`: loopback host only; ports 7497 and 4002 only, no override; clientId fixed at 21 (data adapter uses 9100-9109); after connect every managed account
   must start with `DU` (and contain the approved account) or the adapter disconnects and refuses; every order's account must equal the account bound in the
   signed approval and be one of the connected login's accounts.
 * `execution/permit.py`: `PaperOrderPermit` is minted only by `ExecutionService` (caller check) after `assert_may_submit(PAPER)` succeeds for THAT order;
@@ -119,3 +119,38 @@ lazy import) may be imported only in `brokers/ibkr_paper` and `command_center/ib
   needs the signed approval), typed confirmation phrase, one buy then the offsetting sell, audit trail, per-step PASS/FAIL, non-zero exit on any anomaly,
   cancels its own working orders and flattens only what it created (never a blind flatten if the cancels are unconfirmed).
 Residual risks: execution-id corrections, delayed commission reports, `reqExecutions` day-window limits, STP orders that gap, real TWS error ordering.
+
+## 12. Phase-6 audit fixes (2026-10-15) and the residual limits
+Fixed (tests: tests/test_review_broker_*.py, tests/test_paper_hardening.py):
+* **P6-02 reducing capacity.** An order is "reducing" only if it is opposite to the FILLED position and fits in |position| minus the remaining quantity of every live
+  same-side order (submitting, working, cancel-pending, uncertain). Stacked exits, repeated exit signals and a double flatten therefore cannot flip a position; the
+  excess is new exposure and gets every entry check. Reducing orders are now also subject to the order-frequency limits (only the operator flatten is exempt, via a
+  service-internal flag). `flatten_strategy_positions` first REQUESTS cancellation of the strategy's other working exit/protective orders on that instrument and is
+  accepted only once the cancel acks free capacity (the stop keeps protecting until then; call flatten again after the acks). Pending same-side orders also count toward
+  position/exposure checks of new orders.
+* **P6-03.** The reducing exemption is withdrawn on any instrument with an unresolved ledger/broker position mismatch until `reconcile()` is clean; the operator can
+  `acknowledge_position_mismatch(con_id, ...)` so an explicit exit/flatten may go (entries stay blocked).
+* **P6-04.** PAPER construction verifies the approval and that `RiskEngine.policy.sha256` equals the approved policy hash (a failure latches `_paper_block` and every
+  order is refused with the reason); every submit re-checks it (`assert_may_submit(engine_policy_sha256=...)`).
+* **P6-05.** PAPER refuses `:memory:`. In addition to the ledger lock there is a per-ACCOUNT lock file (`account_<id>.lock`, in `~/.tradelab_locks`, overridable with
+  `lock_dir`/`TRADELAB_LOCK_DIR`) so two processes cannot drive one account. Simulated brokers get a per-broker-object lock name instead.
+* **P6-10.** Stop/size/per-trade-risk rules apply to every non-reducing order whatever its purpose label says; a non-reducing "exit"/"protective" additionally gets
+  `NOT_REDUCING`.
+* **P6-11.** The approval's `capital_allocation` is a hard cap on gross exposure: min(policy cap, capital). An unverifiable approval means cap 0 for new exposure.
+* **P6-06.** A corrupt MAC (non-ASCII, wrong type) is an ordinary verification failure.
+* **P6-07.** Execution ids sharing a stem (IBKR correction convention, UNVERIFIED) are NOT auto-counted: the later revision is recorded in
+  `adapter.unresolved_corrections`, a resync is forced, and entries stay blocked until `acknowledge_execution_corrections` after human review.
+* **P6-08.** `orderRef` = `v1:<intent id>:<16-hex HMAC tag>` (key = CC_APPROVAL_KEY, held by the service's authority). Refs that do not verify are FOREIGN. The 32-char id is
+  used in full.
+* **P6-12.** PAPER submits compare the broker's server time with the local clock (refuse beyond 120 s) and judge approval expiry on the later of the two.
+* **P6-13.** The approve CLI refuses non-`DU` accounts and validity above 24 hours.
+* **P6-09.** Data adapter clientId range is 9100-9109 (docs/comments corrected); the paper adapter stays at 21.
+
+**P6-01 - ACCEPTED design limit (not fixed, cannot be).** Permits are now issued and verified by a `PermitAuthority` object created privately by the service (secrets live in
+closures; no module-level `_SECRET`/`_MINT`, no caller-name check, `bind_authority` is one-shot; an unbound adapter refuses every order). That removes casual forging and
+the old spoofable checks, but Python code running in the SAME process can still read closures, patch the adapter, call `ib_async` directly or place orders itself. We do not
+claim otherwise. The real protection is operational: the execution service runs as a SEPARATE OS process on the user's own computer; `CC_APPROVAL_KEY` exists only in that
+process; TWS "Read-Only API" stays ON except while the user runs the smoke test; and no assistant executes code on that machine. Two review reproducers for this stay
+strict-xfail on purpose (they now fail because the module-level globals no longer exist, not because they are defended against).
+Other residuals: the what-if and correction conventions are assumptions about TWS; the per-account lock is a local file lock (one machine); broker clock skew check needs a
+reachable broker; all of this is tested against fakes only.

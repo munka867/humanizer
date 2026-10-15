@@ -12,7 +12,7 @@ from tradelab.brokers.ibkr_paper.adapter import AdapterUnavailable, ContractSpec
 from tradelab.execution import orders as O
 from tradelab.execution.broker import BrokerRefused, OrderRequest
 from tradelab.execution.intents import Proposal
-from tradelab.execution.permit import PaperOrderPermit, PermitError, mint_permit
+from tradelab.execution.permit import PaperOrderPermit, PermitAuthority, PermitError
 
 
 def rows(svc, q):
@@ -88,12 +88,29 @@ def test_adapter_refuses_orders_without_a_permit(tmp_path):
     assert fake.order_calls == 0
 
 
-def test_permit_cannot_be_constructed_or_minted_outside_the_service():
+def test_hand_built_permit_is_refused_and_there_is_no_module_level_mint():
+    import tradelab.execution.permit as P
+    assert not hasattr(P, "mint_permit") and not hasattr(P, "_SECRET") and not hasattr(P, "_MINT")      # no module-level secrets/mint (P6-01)
+    hand = PaperOrderPermit("p", "i" * 32, "c", ACCT, SPY, 1, "1", "MKT", None, None, "DAY", False, "2026-01-05T15:00:00+00:00",
+                            "2026-01-05T15:01:00+00:00", "0" * 64)
+    req = OrderRequest("c", SPY, 1, Dc(1), "MKT", intent_id="i" * 32, permit=hand)
     with pytest.raises(PermitError):
-        PaperOrderPermit("p", "i", "c", "DU1", 1, 1, "1", "MKT", None, None, "DAY", False, "a", "b", "sig")
-    with pytest.raises(PermitError, match="only be minted by ExecutionService"):
-        mint_permit({"account_id": "DU1"}, intent_id="i", client_order_id="c", con_id=1, side=1, qty=1, order_type="MKT", limit_px=None,
-                    stop_px=None, tif="DAY", outside_rth=False, now=T0)
+        P.consume_permit(hand, req, T0)
+    other = PermitAuthority(b"k")                                      # a different authority cannot mint permits the service's adapter accepts
+    other_permit = other.mint({"account_id": ACCT}, intent_id="i" * 32, client_order_id="c", con_id=SPY, side=1, qty=1, order_type="MKT",
+                              limit_px=None, stop_px=None, tif="DAY", outside_rth=False, now=T0)
+    assert other_permit.sig != hand.sig
+
+
+def test_adapter_binding_is_one_shot_and_unbound_adapter_refuses(tmp_path):
+    svc, ad, fake, clock, _ = make_paper(tmp_path)
+    with pytest.raises(RuntimeError, match="already bound"):
+        ad.bind_authority(lambda *a: None, lambda i: "x", lambda r: None)
+    mod = type("M", (), {"IB": staticmethod(lambda f=fake: f), "Stock": MODULE.Stock, "Order": MODULE.Order})
+    loose = IbkrPaperBroker({SPY: ContractSpec("SPY")}, ib_module=mod, clock=clock)
+    loose.connect()
+    with pytest.raises(BrokerRefused, match="not bound"):
+        loose.submit(OrderRequest("c", SPY, 1, Dc(1), "MKT", intent_id="a" * 32))
 
 
 def held_request(tmp_path, **kw):
@@ -151,7 +168,7 @@ def test_order_sent_with_explicit_account_orderref_and_safe_flags(tmp_path):
     assert r.status == "SUBMITTED"
     contract, order = fake.placed[0]
     assert contract.secType == "STK" and contract.conId == SPY and contract.currency == "USD"
-    assert order.account == ACCT and order.orderRef == r.intent_id and len(order.orderRef) == 32
+    assert order.account == ACCT and order.orderRef.startswith(f"v1:{r.intent_id}:") and len(order.orderRef.split(":")[2]) == 16
     assert (order.action, order.orderType, order.tif, order.outsideRth, order.totalQuantity) == ("BUY", "MKT", "DAY", False, 10.0)
 
 
@@ -169,6 +186,7 @@ def test_currency_and_unqualifiable_contracts_refused(tmp_path):
     with pytest.raises(BrokerRefused, match="currency"):
         ad._contract(SPY)
     assert svc.propose(entry()).status == "BLOCKED"                      # quote unavailable -> no entry
+    svc.close()
     svc2, ad2, fake2, *_ = make_paper(tmp_path, name="q.db")
     fake2.unqualifiable.add(SPY)
     with pytest.raises(BrokerRefused, match="security definition"):
@@ -411,6 +429,7 @@ def test_whatif_warning_blocks_through_margin_hook_and_before_submit(tmp_path):
     svc.start()
     r = svc.propose(entry())
     assert r.status == "BLOCKED" and "MARGIN_CHECK_FAILED_OR_MISSING" in r.reasons and fake.order_calls == 0
+    svc.close()
     svc2, ad2, fake2, *_ = make_paper(tmp_path, name="w2.db", fake=fake, margin_hook=lambda p: True)     # even if the risk hook were bypassed
     svc2.start()
     r2 = svc2.propose(entry())
@@ -422,6 +441,7 @@ def test_whatif_unavailable_blocks_when_policy_requires_it_and_ok_result_allows(
     svc, *_ = make_paper(tmp_path, fake=fake)
     svc.start()
     assert "MARGIN_CHECK_FAILED_OR_MISSING" in svc.propose(entry()).reasons
+    svc.close()
     fake2 = FakeIB()
     svc2, ad2, fake2, *_ = make_paper(tmp_path, name="ok.db", fake=fake2)
     svc2.start()

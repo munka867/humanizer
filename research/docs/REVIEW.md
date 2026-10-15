@@ -504,3 +504,57 @@ Grep: the field appears only in `modes.py` (signing/field list) and `approve.py`
 ## Guards that held under attack (for the record)
 Host other than 127.0.0.1/::1; ports 7496, 4001, 4003, 7498, 7497.0, "7497", True, None; any of ten plausible environment variables; non-DU and mixed logins (disconnect, nothing sent); order account not in the login or not equal to the approved account; permit missing, forged signature, edited fields, wrong intent, expired, replayed, raced by 16 threads;
 approval missing, wrong key, edited payload, other account, other strategy/version, uncovered instrument, expired, edited policy file; LIVE construction and mode reassignment; DEMO/BACKTEST/REPLAY with the real adapter; duplicate signal, lost ack then new signal (UNCERTAIN blocks entries and no resend); ack never becomes a position, tampered `filled_qty` moves nothing; foreign working order blocks entries and is never cancelled; smoke registry answers only for (`SMOKE_TEST`, `1`).
+
+---
+
+# Re-audit (phase 7) of the phase-6 fixes
+
+Method: read the new `service.py`, `risk.py`, `permit.py`, `modes.py`, `approve.py` and the adapter diff, then attacked them with fakes only (SimulatedBroker, `tests/fake_ib_orders.FakeIB`), throwaway keys, tmp dirs and an explicit `lock_dir`
+(nothing written to `~/.tradelab_locks` by the new tests). New file: `tests/test_review_broker_reaudit.py` (16 pass, 11 strict xfail). The phase-6 suites and the engineer's tests all still pass
+(`test_review_broker_*`, `test_exec_*`, `test_paper_*`, `test_cc_ibkr_*`: 374 passed, 1 skipped, 13 xfailed; the 13 are the 11 new reproducers plus the two P6-01 reproducers the engineer deliberately kept).
+
+Count of NEW findings: **HIGH 2, MEDIUM 4, LOW 4, INFO 4.** Both HIGH items are regressions created by the P6-02 fix (flatten now cancels stops first).
+
+## Verdict on the two questions
+* **Reducing-order flip: closed for every route I could build.** Stacked exits, a double or quadruple flatten with delayed fills, partial fills (capacity releases exactly the filled quantity), a cancel that races a fill (CANCEL_PENDING keeps its capacity), an UNCERTAIN exit (keeps capacity and blocks a second exit), two instruments (no shared capacity), a stop carried over a day boundary, and a ledger/broker mismatch (exemption withdrawn; acknowledging it restores it for that instrument only and entries stay blocked) all failed to flip or open a position;
+  the capacity arithmetic never goes negative or above |position| (property check over a grid), opposite-side and short positions behave. Remaining ways to double-close all involve an order the ledger does not know is live: a FOREIGN working exit (P7-10) or a stop orphaned by key rotation (P7-07), and the earlier INFO about reconcile treating an order missing from `reqAllOpenOrders` as cancelled.
+* **Policy-bypass paths: closed.** The engine's policy sha is checked at construction (latch) and on every submit; the purpose label no longer exempts anything; the signed capital cap is enforced (cap 0 when the approval cannot be verified); a corrupt MAC is an ordinary refusal; the approval can no longer be revived by a wound-back clock beyond 120 s; the CLI refuses non-DU and > 24 h and hand-edited records fail verification without the key.
+  Residual: exposure limits do not count unfilled orders in OTHER instruments (P7-04), and P6-01 (any in-process code) stays accepted/open.
+
+## Most dangerous remaining issue
+**P7-02** (with its sibling P7-01): `flatten_strategy_positions` cancels the protective stop first and only then asks for the exit. Approvals now last at most 24 h by design, so whenever the service outlives its approval the sequence is guaranteed: stop cancelled, exit refused by the mode gate, position left open and unprotected.
+
+## HIGH
+### P7-01 HIGH - flatten can end with a position that has neither a stop nor an exit
+`service.py:flatten_strategy_positions` (cancel loop, `process_events`, then `_propose(..., True)`). With a broker whose cancel ack is not delivered within the single `process_events()` pass (real TWS callbacks are asynchronous), the exit is refused as NOT_REDUCING (the stop still holds capacity), the report says `complete: False`, and when the ack later arrives the stop is gone: position +10, no working order (`test_flatten_never_leaves_a_position_without_stop_or_exit`).
+The docstring tells the operator to call flatten again, but an emergency/kill-switch path or a crash in between leaves the position naked. Fix: keep the stop until the exit is accepted at the broker (OCA group, or place the exit first and cancel the stop on the exit's ack/fill), or make "flatten pending" a persisted state that sends the exit automatically when the cancel acks arrive.
+
+### P7-02 HIGH - the mode gate is checked after the stop has been cancelled
+Same function. If the exit is going to be refused by the PAPER gate (expired approval, clock skew > 120 s, latched policy block, registry state, unverifiable approval) the stop has already been cancelled (`test_flatten_does_not_cancel_the_stop_when_the_exit_would_be_refused`: stop cancelled, exit `MODE_GATE: approval expired`, no order sent).
+The same gate also blocks every ordinary reducing order, so after approval expiry the system cannot exit at all (acceptable only if the operator knows to use TWS), but it must not remove protection on the way. Fix: dry-run the gate and the capacity check before any cancel; do nothing (and say so loudly) if the exit would be refused.
+
+## MEDIUM
+### P7-03 MEDIUM - a cancel that fails on a disconnect leaves CANCEL_PENDING forever: exits livelock
+`service.py:_request_cancel` moves the order to CANCEL_PENDING before `broker.cancel`; on `BrokerDisconnected` the state is not rolled back. `reconcile()` only resolves SUBMITTING/UNCERTAIN orders found at the broker, and flatten only re-cancels ACKED/PARTIAL, so after reconnect + reconcile + flatten the stop still holds capacity and every exit is refused while the stop is live at the broker
+(`test_flatten_recovers_after_a_disconnect_during_the_cancel`). Fix: on cancel failure restore the previous state; let reconcile move CANCEL_PENDING found working back to ACKED; let flatten retry cancels in CANCEL_PENDING.
+
+### P7-04 MEDIUM - pending orders in other instruments are not counted in exposure limits
+`risk.py:_check_new_exposure`: `post` includes pending same-side orders for the SAME instrument only. Two 30-share orders (SPY and QQQ at 400) submitted before either fills both pass although gross would be 24,000 against 20,000 and correlated exposure 24,000 against 15,000 (`test_pending_orders_in_other_instruments_count_toward_gross_exposure`). The signed capital cap has the same blind spot. Fix: build `pos_after` from positions plus ALL live orders' remaining quantity.
+
+### P7-07 MEDIUM - rotating CC_APPROVAL_KEY orphans live orders and releases their capacity
+`permit.py:parse_ref` / `service.py:reconcile`. Orders tagged with the old key are FOREIGN to the new service; reconcile marks the ledger copy CANCELED ("not at broker") although the GTC stop is live, freeing reducing capacity, so an exit can double-close (`test_key_rotation_does_not_release_capacity_of_still_working_orders`; it also raises UNKNOWN_BROKER_ORDER). Fix: keep the previous key's tag verifiable for working orders (key id in the ref), or refuse to start with unmatched working orders until the operator resolves them.
+
+### P7-09 MEDIUM - reducing orders now count against the order-frequency limits
+`risk.py:evaluate` applies `_check_frequency` to every order except the operator flatten. After `max_orders_per_day` (window of up to ~48 h) a protective stop for an open position is refused (`ORDER_FREQUENCY_PER_DAY`), and the per-minute cap can starve the stops of a burst of entries (`test_protective_stop_is_not_starved_by_the_daily_order_limit`). Fix: exempt strictly reducing/protective orders from the frequency limits or reserve a quota for them.
+
+## LOW
+* **P7-05** `service.py:_acquire_account_lock`: a broker that merely claims `is_simulated=True` gets a per-object lock name in /tmp, so in PAPER mode two services can drive one real account (`test_paper_account_lock_cannot_be_dodged_by_claiming_to_be_simulated`). Fix: in PAPER ignore the claim, always use the account lock, and refuse PAPER with `is_simulated` True.
+* **P7-06** the account-lock directory comes from `lock_dir` / `TRADELAB_LOCK_DIR` / `HOME`; a process with a different value is not excluded, and the lock is an advisory local `flock` (`test_account_lock_directory_cannot_be_redirected`). Stale lock files and PID reuse are NOT a problem (flock, not the stored PID, decides: `test_account_lock_is_released_on_close_and_stale_files_do_not_block`).
+* **P7-08** `modes.py:verify_approval` does not enforce the CLI limits (DU account, <= 24 h): a record made with `make_approval` and the key for `U...` or 100 years verifies (`test_verify_approval_enforces_the_same_limits_as_the_cli`); the adapter's DU check is then the only wall. Hand-edited records fail verification (HELD).
+* **P7-10** a FOREIGN working exit (hand-placed TWS stop) blocks entries but is not counted as reducing capacity, so a full-size ledger exit is accepted next to it (`test_foreign_working_exit_counts_against_reducing_capacity`).
+
+## INFO
+* `acknowledge_position_mismatch` / `acknowledge_execution_corrections` are unauthenticated methods, but nothing in `src`, `scripts` or `command_center` calls them and the strategy adapter never holds the service (`test_nothing_unattended_calls_the_acknowledge_methods_...`); the acknowledgement lapses when the mismatch is resolved and never unblocks entries (HELD). Acknowledging a mismatch restores the exemption on a ledger position the broker does not have: that is the operator's explicit risk.
+* P6-01 re-confirmed as accepted: the module-level secrets are gone and hand-built, edited or unbound-adapter permits are refused (`test_old_module_level_forging_surface_is_gone`), but the signing function is reachable through the permit's closure (`test_closure_extraction_cannot_forge_a_permit`, strict xfail, expected).
+* `ExecutionService.__init__` binds the adapter after taking its locks; a second service on an already-bound adapter raises `RuntimeError` after acquiring the ledger and account locks (released only when the half-built object is collected). `_paper_block` is set once at construction and never re-evaluated, so a service started with a bad/expired approval refuses everything until restarted.
+* Held under attack: orderRef parsing (every tamper, other key, non-ASCII, bytes, wrong version -> FOREIGN); capital cap 0 for an unverifiable approval; policy latch plus per-submit re-check; broker time later than local expires the approval, skew > 120 s refused; CLI limits (U-account, 24.01 h, 0, negative, lowercase, NaN all refused, nothing written).

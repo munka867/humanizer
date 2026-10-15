@@ -204,7 +204,7 @@ def test_risk_engine_policy_must_be_the_approved_policy(tmp_path):
     adapter = IbkrPaperBroker({SPY: ContractSpec("SPY")}, ib_module=mod, expected_account=ACCT, clock=clock); adapter.connect()
     svc = ExecutionService(str(tmp_path / "x.db"), Mode.PAPER, adapter, RiskEngine.from_file(loose), lambda c: adapter.quote(c), clock,
                            registry_state=lambda s, v: "approved_paper", risk_policy_path=strict,
-                           approval_path=approval(tmp_path, policy=strict, instruments=(SPY,), clock_t=clock()), env=ENV, margin_hook=adapter.margin_hook)
+                           approval_path=approval(tmp_path, policy=strict, instruments=(SPY,), clock_t=clock()), env=ENV, margin_hook=adapter.margin_hook, lock_dir=str(tmp_path / "locks"))
     svc.start()
     r = svc.propose(entry(qty=20, stop="99.9"))
     assert r.status != "SUBMITTED", "20 shares were sent although the APPROVED policy caps SPY at 5"

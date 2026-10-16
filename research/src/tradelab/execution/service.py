@@ -7,7 +7,13 @@ Controls:     pause_new_entries, cancel_entry_orders, flatten_strategy_positions
 No method here is reachable from a strategy: strategies only ever see bars."""
 from __future__ import annotations
 
-import fcntl
+import sys
+if sys.platform == "win32":
+    import msvcrt
+    fcntl = None
+else:
+    import fcntl
+    msvcrt = None
 import json
 import os
 import re
@@ -27,6 +33,27 @@ from tradelab.execution.modes import KEY_ENV, Mode, ModeDenied, assert_may_submi
 from tradelab.execution.permit import PermitAuthority
 from tradelab.execution.risk import Quote, RiskDecision, RiskEngine, RiskInputs, is_reducing
 
+
+
+_WIN_LOCK_OFFSET = 1 << 20      # Windows: lock one byte far past the pid text, so reading/writing the pid is never blocked
+
+
+def _lock_nb(fh) -> None:
+    """Exclusive non-blocking lock on an open file; raises OSError when another process holds it (POSIX flock / Windows msvcrt)."""
+    if msvcrt is not None:
+        fh.seek(_WIN_LOCK_OFFSET)
+        msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+        fh.seek(0)
+    else:
+        fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+
+def _unlock(fh) -> None:
+    if msvcrt is not None:
+        fh.seek(_WIN_LOCK_OFFSET)
+        msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
+    else:
+        fcntl.flock(fh, fcntl.LOCK_UN)
 
 class WriterLockHeld(RuntimeError):
     pass
@@ -82,7 +109,7 @@ class ExecutionService:
     def _acquire_lock(self, path):
         fh = open(path, "a+")
         try:
-            fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            _lock_nb(fh)
         except OSError as e:
             fh.close()
             raise WriterLockHeld(f"another execution service holds {path}") from e
@@ -123,7 +150,7 @@ class ExecutionService:
         name = re.sub(r"[^A-Za-z0-9_.-]", "_", f"account_{acct}") + (f"_{os.getpid()}_{id(self.broker)}" if simulated else "") + ".lock"
         fh = open(d / name, "a+")
         try:
-            fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            _lock_nb(fh)
         except OSError as e:
             fh.close()
             raise WriterLockHeld(f"another execution service already drives account {acct} ({d / name})") from e
@@ -134,7 +161,10 @@ class ExecutionService:
         for attr in ("_lock_fh", "_acct_lock_fh"):
             fh = getattr(self, attr)
             if fh:
-                fcntl.flock(fh, fcntl.LOCK_UN)
+                try:
+                    _unlock(fh)
+                except OSError:
+                    pass
                 fh.close()
                 setattr(self, attr, None)
         self.conn.close()

@@ -1,6 +1,6 @@
 numpy==2.5.3
 pandas==3.0.5
-PyYAML==6.0.1
+PyYAML>=6.0.2
 pytest==9.1.1
 tzdata==2026.5   # needed on Windows: it has no system time-zone database
 # optional, live data from your own TWS/Gateway (read-only): see requirements-ibkr.txt and docs/IBKR_SETUP.md

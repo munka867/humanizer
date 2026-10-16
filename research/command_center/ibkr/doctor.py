@@ -101,6 +101,10 @@ async def run_doctor(port: int | None = None, ib_factory=None, stock_factory=Non
                 if q and (q.last is not None or q.bid is not None):
                     ok("market-data type and a quote", f"tick type: {q.data_type_label} (1 live, 2 frozen, 3 delayed, 4 delayed frozen); last={q.last}")
                 else:
+                    benign = {2104, 2106, 2107, 2108, 2119, 2158}
+                    seen = [(c, t) for (_, _, c, t) in client.errors if c not in benign]
+                    for c, t in seen[-6:]:
+                        print(f"      TWS message {c}: {t[:240]}")
                     codes = sorted({c for (_, _, c, _) in client.errors if c in (354, 10167, 10186, 10197)})
                     d = E.explain(codes[0]) if codes else None
                     bad("market-data type and a quote", f"no tick within {wait_tick:.0f}s" + (f" (TWS said {codes[0]}: {d['title']})" if d else " (the market may be closed, or no data permission)"),

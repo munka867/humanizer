@@ -21,7 +21,7 @@ from .manager import mask_account
 DOCTOR_CLIENT_ID = 9102
 
 
-async def run_doctor(port: int | None = None, ib_factory=None, stock_factory=None, out=print, fake=False, wait_tick: float = 8.0) -> int:
+async def run_doctor(port: int | None = None, ib_factory=None, stock_factory=None, out=print, fake=False, wait_tick: float = 8.0, live_only: bool = False) -> int:
     fails = 0
 
     def ok(name, detail=""):
@@ -89,7 +89,7 @@ async def run_doctor(port: int | None = None, ib_factory=None, stock_factory=Non
             bad("contract qualifies (SPY)", str(e), E.explain(200)["fix"])
         if inst:
             try:
-                client.set_market_data_type(3)
+                client.set_market_data_type(1 if live_only else 3)      # --live: ask for LIVE only, as the paper smoke test does
                 client.subscribe_quote(inst)
                 t0 = time.time()
                 q = None
@@ -98,6 +98,11 @@ async def run_doctor(port: int | None = None, ib_factory=None, stock_factory=Non
                     if q and (q.last is not None or q.bid is not None):
                         break
                     await asyncio.sleep(0.25)
+                if live_only:
+                    for c, t in [(c, t) for (_, _, c, t) in client.errors if c not in {2104, 2106, 2107, 2108, 2119, 2158}][-8:]:
+                        out(f"      TWS message {c}: {t[:240]}")
+                    if q:
+                        out(f"      fields: bid={q.bid} ask={q.ask} last={q.last} type={q.data_type_label}")
                 if q and (q.last is not None or q.bid is not None):
                     ok("market-data type and a quote", f"tick type: {q.data_type_label} (1 live, 2 frozen, 3 delayed, 4 delayed frozen); last={q.last}")
                 else:
@@ -143,12 +148,13 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description="Read-only IBKR connection doctor")
     ap.add_argument("--port", type=int, default=None, help="7497 TWS paper (default), 4002 Gateway paper")
     ap.add_argument("--fake", action="store_true", help="run against the SIMULATED IB (test fixture)")
+    ap.add_argument("--live", action="store_true", help="ask for LIVE quotes only (what the paper smoke test needs) and print every TWS message")
     a = ap.parse_args(argv)
     ibf = sf = None
     if a.fake:
         from .fake_ib import FakeIB, FakeStock
         ibf, sf = FakeIB, FakeStock
-    return asyncio.run(run_doctor(a.port, ibf, sf, fake=a.fake))
+    return asyncio.run(run_doctor(a.port, ibf, sf, fake=a.fake, wait_tick=12.0 if a.live else 8.0, live_only=a.live))
 
 
 if __name__ == "__main__":

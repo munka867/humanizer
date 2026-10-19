@@ -72,6 +72,8 @@ class IbkrPaperBroker:
         self._clock, self._allow_rth, self._whatif_on_submit, self._max_margin = clock, allow_outside_rth, whatif_on_submit, max_init_margin_change
         self._timeout, self._pump = connect_timeout, event_pump_seconds
         self.ib = None
+        self._tickers = {}                  # con_id -> streaming ticker (kept subscribed; see quote())
+        self._quote_wait = 6.0
         self.accounts: list[str] = []
         self._events: list[BrokerEvent] = []
         self._trades: dict[str, object] = {}
@@ -114,6 +116,7 @@ class IbkrPaperBroker:
             finally:
                 self.connected = False
             raise
+        ib.RequestTimeout = 15.0            # synchronous ib_async calls must never wait forever
         self.ib, self.connected = ib, True
         ib.orderStatusEvent += self._on_status
         ib.execDetailsEvent += self._on_exec
@@ -446,10 +449,18 @@ class IbkrPaperBroker:
     def quote(self, con_id: int) -> Quote | None:
         self._require()
         contract = self._contract(con_id)
-        tk = self.ib.reqTickers(contract)
-        if not tk:
-            return None
-        t = tk[0]
+        t = self._tickers.get(con_id)
+        if t is None:
+            self.ib.reqMarketDataType(1)            # LIVE only: delayed ticks would be refused by the age check anyway
+            t = self.ib.reqMktData(contract, "", False, False)
+            self._tickers[con_id] = t
+        waited = 0.0
+        while waited <= self._quote_wait:            # bounded wait for the first live bid/ask (a stream, as the doctor does)
+            b, a = _f(t.bid), _f(t.ask)
+            if b is not None and a is not None and b > 0 and a > 0:
+                break
+            self.ib.sleep(0.25)
+            waited += 0.25
         bid, ask, last = _f(t.bid), _f(t.ask), _f(t.last)
         if bid is None or ask is None or bid <= 0 or ask <= 0:
             return None

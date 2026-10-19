@@ -204,6 +204,20 @@ class FakeIB:
     def reqTickers(self, *cs):
         return [SimpleNamespace(**self.ticker)]
 
+    def reqMarketDataType(self, n):
+        self.market_data_type = n
+
+    def reqMktData(self, contract, *a, **k):
+        outer = self
+
+        class _LiveTicker:                       # like ib_async's Ticker: reflects the latest ticks, not a snapshot
+            def __getattr__(self, name):
+                try:
+                    return outer.ticker[name]
+                except KeyError:
+                    raise AttributeError(name)
+        return _LiveTicker()
+
 
 def foreign_trade(order_id=555, con_id=1001, action="SELL", qty=3, account="DUFAKE001", status="Submitted", ref=""):
     return SimpleNamespace(contract=SimpleNamespace(conId=con_id), order=Order(orderId=order_id, clientId=7, action=action, totalQuantity=qty,

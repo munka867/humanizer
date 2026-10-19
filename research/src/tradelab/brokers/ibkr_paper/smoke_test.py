@@ -120,6 +120,8 @@ def run(argv=None, *, ib_module=None, input_fn=input, env=None, clock=utcnow, sl
         q = adapter.quote(SPY_CON_ID)
         if q is None or q.bid is None or q.ask is None:
             steps.add("live SPY bid/ask available", False, "no live quote (market data subscription / market closed?). Nothing was sent.")
+            for code, text in [e for e in getattr(adapter, "recent_errors", []) if e[0] not in (2104, 2106, 2107, 2108, 2119, 2158)][-5:]:
+                out(f"      TWS message {code}: {text}")
             return 1
         age = (clock() - q.ts).total_seconds()
         if not steps.add("SPY quote is fresh", age <= pol.max_data_age_seconds, f"age {age:.0f}s (limit {pol.max_data_age_seconds}s; delayed data is refused)"):

@@ -72,6 +72,7 @@ class IbkrPaperBroker:
         self._clock, self._allow_rth, self._whatif_on_submit, self._max_margin = clock, allow_outside_rth, whatif_on_submit, max_init_margin_change
         self._timeout, self._pump = connect_timeout, event_pump_seconds
         self.ib = None
+        self.recent_errors = []            # (code, text) as sent by TWS, newest last; shown by the smoke test when a quote never arrives
         self._tickers = {}                  # con_id -> streaming ticker (kept subscribed; see quote())
         self._quote_wait = 6.0
         self.accounts: list[str] = []
@@ -206,6 +207,7 @@ class IbkrPaperBroker:
         self.commissions[report.execId] = (D(report.commission), getattr(report, "currency", ""))
 
     def _on_error(self, reqId, errorCode, errorString, contract=None):
+        self.recent_errors = (self.recent_errors + [(int(errorCode), str(errorString)[:200])])[-30:]
         known = any(getattr(t.order, "orderId", None) == reqId for t in self._trades.values())
         order_related = known or (isinstance(reqId, int) and reqId > 0)
         action, text = E.classify(int(errorCode), order_related)
